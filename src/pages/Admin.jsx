@@ -1,566 +1,810 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo, useId } from "react";
 
-const iconPath = (t) => ({
-  doc: "M6 2h8l4 4v14a2 2 0 01-2 2H6a2 2 0 01-2-2V4a2 2 0 012-2zm0 0v4h4M8 13h8M8 17h5",
-  sys: "M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5",
-  fig: "M5 5.5A3.5 3.5 0 018.5 2H12v7H8.5A3.5 3.5 0 015 5.5zM12 2h3.5a3.5 3.5 0 010 7H12V2zM12 12.5a3.5 3.5 0 117 0 3.5 3.5 0 01-7 0zM5 19.5A3.5 3.5 0 018.5 16H12v3.5a3.5 3.5 0 01-7 0zM5 12.5A3.5 3.5 0 018.5 9H12v7H8.5A3.5 3.5 0 015 12.5z",
-  ai: "M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z",
-  ppl: "M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75",
-  moon: "M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z",
-  sun: "M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42M12 5a7 7 0 100 14A7 7 0 0012 5z",
-  menu: "M3 12h18M3 6h18M3 18h18",
-  close: "M18 6L6 18M6 6l12 12",
-})[t] || "";
+/* ───────────────────────────  TOKENS  ─────────────────────────── */
+const C = {
+  side: "#0a0a0a",
+  sideBd: "#1a1a1a",
+  sideTx: "#a1a1aa",
+  sideTxA: "#fff",
+  bg: "#f5f5f7",
+  card: "#ffffff",
+  bd: "#e5e7eb",
+  bdH: "#d4d4d8",
+  tx: "#111827",
+  txMu: "#6b7280",
+  txDim: "#9ca3af",
+  acc: "#378ADD",
+  accD: "#185FA5",
+  accBg: "#eaf2fb",
+  ok: "#16a34a",
+  warn: "#d97706",
+  danger: "#dc2626",
+  dangerBg: "#fef2f2",
+};
 
-function Icon({ type, size = 18 }) {
+const SECTIONS = [
+  { id: "hero",       label: "Hero",       num: "01" },
+  { id: "about",      label: "About",      num: "02" },
+  { id: "stats",      label: "Metrics",    num: "03" },
+  { id: "expertise",  label: "Expertise",  num: "04" },
+  { id: "cases",      label: "Cases",      num: "05" },
+  { id: "experience", label: "Experience", num: "06" },
+  { id: "stack",      label: "Stack",      num: "07" },
+  { id: "domains",    label: "Domains",    num: "08" },
+];
+
+/* ───────────────────────────  ROOT  ─────────────────────────── */
+export default function Admin() {
+  const [data, setData] = useState(null);
+  const [original, setOriginal] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [saveStatus, setSaveStatus] = useState("idle"); // idle | saving | success | error
+  const [saveError, setSaveError] = useState("");
+  const [activeSection, setActiveSection] = useState("hero");
+  const mainRef = useRef(null);
+
+  /* ── load ── */
+  useEffect(() => {
+    fetch(`/content.json?t=${Date.now()}`)
+      .then(r => r.json())
+      .then(json => {
+        setData(json);
+        setOriginal(JSON.parse(JSON.stringify(json)));
+        setLoading(false);
+      })
+      .catch(() => {
+        setError("Не удалось загрузить content.json");
+        setLoading(false);
+      });
+  }, []);
+
+  /* ── dirty tracking + beforeunload guard ── */
+  const isDirty = useMemo(() => {
+    if (!data || !original) return false;
+    return JSON.stringify(data) !== JSON.stringify(original);
+  }, [data, original]);
+
+  useEffect(() => {
+    const onBeforeUnload = (e) => {
+      if (!isDirty) return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [isDirty]);
+
+  /* ── scroll spy для подсветки секции в сайдбаре ── */
+  useEffect(() => {
+    if (!mainRef.current) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter(e => e.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
+        if (visible[0]) setActiveSection(visible[0].target.id);
+      },
+      { root: mainRef.current, rootMargin: "-20% 0px -60% 0px", threshold: [0, 0.25, 0.5] }
+    );
+    SECTIONS.forEach(s => {
+      const el = document.getElementById(s.id);
+      if (el) obs.observe(el);
+    });
+    return () => obs.disconnect();
+  }, [data]);
+
+  const scrollTo = (id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+    setActiveSection(id);
+  };
+
+  /* ── save to GitHub ── */
+  const saveToGitHub = async () => {
+    setSaveStatus("saving");
+    setSaveError("");
+    const token = import.meta.env.VITE_GITHUB_TOKEN;
+    const owner = "alesfilipenka-sudo";
+    const repo = "my-site";
+    const path = "public/content.json";
+
+    if (!token) {
+      setSaveStatus("error");
+      setSaveError("VITE_GITHUB_TOKEN не задан");
+      setTimeout(() => setSaveStatus("idle"), 5000);
+      return;
+    }
+
+    try {
+      const getRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=main`, {
+        headers: { Authorization: `Bearer ${token}`, "Cache-Control": "no-cache" },
+      });
+      if (!getRes.ok) throw new Error(`GET ${getRes.status}`);
+      const fileData = await getRes.json();
+      const json = JSON.stringify(data, null, 2);
+      const contentBase64 = btoa(unescape(encodeURIComponent(json)));
+
+      const putRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: "admin: content update " + new Date().toISOString(),
+          content: contentBase64,
+          sha: fileData.sha,
+        }),
+      });
+      if (!putRes.ok) throw new Error(`PUT ${putRes.status}`);
+
+      setOriginal(JSON.parse(JSON.stringify(data)));
+      setSaveStatus("success");
+      setTimeout(() => setSaveStatus("idle"), 3500);
+    } catch (e) {
+      setSaveStatus("error");
+      setSaveError(e.message || "GitHub API error");
+      setTimeout(() => setSaveStatus("idle"), 6000);
+    }
+  };
+
+  const reset = () => {
+    if (!isDirty) return;
+    if (!confirm("Откатить все несохранённые изменения?")) return;
+    setData(JSON.parse(JSON.stringify(original)));
+  };
+
+  if (loading) return <CenterMessage>Loading…</CenterMessage>;
+  if (error)   return <CenterMessage tone="danger">{error}</CenterMessage>;
+
+  /* ── update helpers ── */
+  const setHero    = (k, v) => setData({ ...data, hero: { ...data.hero, [k]: v } });
+  const setAbout   = (v)    => setData({ ...data, about: v });
+  const setListAt  = (key, idx, patch) => {
+    const list = [...data[key]];
+    list[idx] = { ...list[idx], ...patch };
+    setData({ ...data, [key]: list });
+  };
+  const addToList  = (key, item) => setData({ ...data, [key]: [...data[key], item] });
+  const removeFromList = (key, idx) => {
+    if (!confirm("Удалить элемент?")) return;
+    setData({ ...data, [key]: data[key].filter((_, i) => i !== idx) });
+  };
+  const setStringList = (key, list) => setData({ ...data, [key]: list });
+
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d={iconPath(type)} />
-    </svg>
+    <div style={{ display: "flex", height: "100vh", overflow: "hidden", background: C.bg, color: C.tx, fontFamily: "Inter, system-ui, -apple-system, sans-serif", colorScheme: "light" }}>
+      <Sidebar active={activeSection} onSelect={scrollTo} />
+
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+        <Topbar
+          isDirty={isDirty}
+          saveStatus={saveStatus}
+          saveError={saveError}
+          onSave={saveToGitHub}
+          onReset={reset}
+        />
+
+        <main ref={mainRef} style={{ flex: 1, overflowY: "auto", padding: "32px 40px 120px" }}>
+          <div style={{ maxWidth: 920, margin: "0 auto" }}>
+
+            {/* HERO */}
+            <Section id="hero" num="01" title="Hero" subtitle="Имя, должность, контакты, статус доступности">
+              <Card>
+                <Row>
+                  <Field label="Name"  value={data.hero?.name}  onChange={v => setHero("name", v)} />
+                  <Field label="Title" value={data.hero?.title} onChange={v => setHero("title", v)} />
+                </Row>
+                <Field label="Tagline" type="textarea" value={data.hero?.tagline} onChange={v => setHero("tagline", v)} />
+                <Row>
+                  <Field label="Email"    value={data.hero?.email}    onChange={v => setHero("email", v)} />
+                  <Field label="Location" value={data.hero?.location} onChange={v => setHero("location", v)} />
+                </Row>
+                <Row>
+                  <Field label="LinkedIn"  value={data.hero?.linkedin}  onChange={v => setHero("linkedin", v)} />
+                  <Field label="Instagram" value={data.hero?.instagram} onChange={v => setHero("instagram", v)} />
+                </Row>
+                <Row>
+                  <Field label="Telegram" value={data.hero?.telegram} onChange={v => setHero("telegram", v)} />
+                  <Field label="Avatar URL" value={data.hero?.avatar || "/avatar.jpg"} onChange={v => setHero("avatar", v)} />
+                </Row>
+                <Toggle
+                  label="Available for work"
+                  hint="Зелёный бейдж в Hero"
+                  checked={!!data.hero?.available}
+                  onChange={v => setHero("available", v)}
+                />
+              </Card>
+            </Section>
+
+            {/* ABOUT */}
+            <Section id="about" num="02" title="About" subtitle="Текст параграфа в секции Professional story">
+              <Card>
+                <Field
+                  label="About"
+                  type="textarea"
+                  rows={6}
+                  value={data.about}
+                  onChange={setAbout}
+                />
+              </Card>
+            </Section>
+
+            {/* STATS */}
+            <Section
+              id="stats" num="03" title="Metrics"
+              subtitle="Цифры в Hero (4 штуки оптимально)"
+              action={
+                <BtnGhost onClick={() => addToList("stats", { value: "0", label: "new metric" })}>+ Add metric</BtnGhost>
+              }
+            >
+              {data.stats?.map((s, i) => (
+                <Card key={i}>
+                  <ItemHeader
+                    title={s.value || "—"}
+                    subtitle={s.label}
+                    hidden={!!s.hidden}
+                    onToggleHidden={() => setListAt("stats", i, { hidden: !s.hidden })}
+                    onRemove={() => removeFromList("stats", i)}
+                  />
+                  <Row>
+                    <Field label="Value" value={s.value} onChange={v => setListAt("stats", i, { value: v })} />
+                    <Field label="Label" value={s.label} onChange={v => setListAt("stats", i, { label: v })} />
+                  </Row>
+                </Card>
+              ))}
+            </Section>
+
+            {/* EXPERTISE */}
+            <Section
+              id="expertise" num="04" title="Expertise"
+              subtitle="Карточки 'What I do'. Иконки: doc, sys, fig, ai, ppl"
+              action={
+                <BtnGhost onClick={() => addToList("expertise", {
+                  id: nextId(data.expertise), title: "New expertise", desc: "", icon: "doc",
+                })}>+ Add expertise</BtnGhost>
+              }
+            >
+              {data.expertise?.map((e, i) => (
+                <Card key={e.id ?? i}>
+                  <ItemHeader
+                    title={e.title || "Untitled"}
+                    subtitle={`icon: ${e.icon}`}
+                    hidden={!!e.hidden}
+                    onToggleHidden={() => setListAt("expertise", i, { hidden: !e.hidden })}
+                    onRemove={() => removeFromList("expertise", i)}
+                  />
+                  <Row>
+                    <Field label="Title" value={e.title} onChange={v => setListAt("expertise", i, { title: v })} />
+                    <Field
+                      label="Icon"
+                      type="select"
+                      options={["doc", "sys", "fig", "ai", "ppl"]}
+                      value={e.icon}
+                      onChange={v => setListAt("expertise", i, { icon: v })}
+                    />
+                  </Row>
+                  <Field label="Description" type="textarea" value={e.desc} onChange={v => setListAt("expertise", i, { desc: v })} />
+                </Card>
+              ))}
+            </Section>
+
+            {/* CASES */}
+            <Section
+              id="cases" num="05" title="Cases"
+              subtitle="Selected work. Аккордеон Context / Task / Result"
+              action={
+                <BtnGhost onClick={() => addToList("cases", {
+                  id: nextId(data.cases), title: "New case", company: "", period: "",
+                  domain: "", tags: [], context: "", task: "", result: "",
+                })}>+ Add case</BtnGhost>
+              }
+            >
+              {data.cases?.map((c, i) => (
+                <Card key={c.id ?? i} accent>
+                  <ItemHeader
+                    title={c.title || "Untitled case"}
+                    subtitle={`${c.company || "—"} · ${c.period || "—"}`}
+                    hidden={!!c.hidden}
+                    onToggleHidden={() => setListAt("cases", i, { hidden: !c.hidden })}
+                    onRemove={() => removeFromList("cases", i)}
+                  />
+                  <Field label="Title" value={c.title} onChange={v => setListAt("cases", i, { title: v })} />
+                  <Row>
+                    <Field label="Company" value={c.company} onChange={v => setListAt("cases", i, { company: v })} />
+                    <Field label="Period"  value={c.period}  onChange={v => setListAt("cases", i, { period: v })} />
+                    <Field label="Domain"  value={c.domain}  onChange={v => setListAt("cases", i, { domain: v })} />
+                  </Row>
+                  <TagEditor
+                    label="Tags"
+                    tags={c.tags || []}
+                    onChange={tags => setListAt("cases", i, { tags })}
+                    placeholder="Add tag…"
+                  />
+                  <Field label="Context" type="textarea" rows={3} value={c.context} onChange={v => setListAt("cases", i, { context: v })} />
+                  <Field label="Task"    type="textarea" rows={3} value={c.task}    onChange={v => setListAt("cases", i, { task: v })} />
+                  <Field label="Result"  type="textarea" rows={3} value={c.result}  onChange={v => setListAt("cases", i, { result: v })} />
+                </Card>
+              ))}
+            </Section>
+
+            {/* EXPERIENCE */}
+            <Section
+              id="experience" num="06" title="Experience"
+              subtitle="Career timeline. Зелёная точка = current"
+              action={
+                <BtnGhost onClick={() => addToList("experience", {
+                  id: nextId(data.experience), company: "", role: "", period: "", current: false,
+                })}>+ Add row</BtnGhost>
+              }
+            >
+              {data.experience?.map((e, i) => (
+                <Card key={e.id ?? i}>
+                  <ItemHeader
+                    title={e.company || "—"}
+                    subtitle={`${e.role || "—"} · ${e.period || "—"}`}
+                    hidden={!!e.hidden}
+                    onToggleHidden={() => setListAt("experience", i, { hidden: !e.hidden })}
+                    onRemove={() => removeFromList("experience", i)}
+                  />
+                  <Row>
+                    <Field label="Company" value={e.company} onChange={v => setListAt("experience", i, { company: v })} />
+                    <Field label="Role"    value={e.role}    onChange={v => setListAt("experience", i, { role: v })} />
+                    <Field label="Period"  value={e.period}  onChange={v => setListAt("experience", i, { period: v })} />
+                  </Row>
+                  <Toggle
+                    label="Current"
+                    hint="Подсвечивает строку зелёной точкой"
+                    checked={!!e.current}
+                    onChange={v => setListAt("experience", i, { current: v })}
+                  />
+                </Card>
+              ))}
+            </Section>
+
+            {/* STACK */}
+            <Section id="stack" num="07" title="Stack & tools" subtitle="Теги под Experience">
+              <Card>
+                <TagEditor
+                  label="Stack"
+                  tags={data.stack || []}
+                  onChange={list => setStringList("stack", list)}
+                  placeholder="Add tool…"
+                />
+              </Card>
+            </Section>
+
+            {/* DOMAINS */}
+            <Section id="domains" num="08" title="Domains" subtitle="Теги в About → Domains">
+              <Card>
+                <TagEditor
+                  label="Domains"
+                  tags={data.domains || []}
+                  onChange={list => setStringList("domains", list)}
+                  placeholder="Add domain…"
+                  accent
+                />
+              </Card>
+            </Section>
+
+          </div>
+        </main>
+      </div>
+
+      <GlobalStyles />
+    </div>
   );
 }
 
-function useInView(threshold = 0.15) {
-  const ref = useRef(null);
-  const [vis, setVis] = useState(false);
-  useEffect(() => {
-    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) setVis(true); }, { threshold });
-    if (ref.current) obs.observe(ref.current);
-    return () => obs.disconnect();
-  }, []);
-  return [ref, vis];
+/* ───────────────────────────  HELPERS  ─────────────────────────── */
+const nextId = (list = []) => (list.length ? Math.max(...list.map(x => x.id || 0)) + 1 : 1);
+
+/* ───────────────────────────  SIDEBAR  ─────────────────────────── */
+function Sidebar({ active, onSelect }) {
+  return (
+    <aside style={{
+      width: 240, flexShrink: 0, background: C.side, color: C.sideTx,
+      borderRight: `1px solid ${C.sideBd}`, display: "flex", flexDirection: "column",
+    }}>
+      <div style={{ padding: "22px 22px 18px", borderBottom: `1px solid ${C.sideBd}` }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ width: 8, height: 8, borderRadius: "50%", background: C.acc, boxShadow: `0 0 12px ${C.acc}` }} />
+          <span style={{ color: C.sideTxA, fontSize: 13, fontWeight: 700, letterSpacing: "1px" }}>ALES</span>
+          <span style={{ color: C.sideTx, fontSize: 11, letterSpacing: "1px" }}>ADMIN</span>
+        </div>
+      </div>
+
+      <nav style={{ padding: "14px 10px", flex: 1, overflowY: "auto" }}>
+        {SECTIONS.map(s => {
+          const isActive = active === s.id;
+          return (
+            <button
+              key={s.id}
+              onClick={() => onSelect(s.id)}
+              className="side-link"
+              style={{
+                width: "100%", display: "flex", alignItems: "center", gap: 12,
+                padding: "10px 12px", borderRadius: 8, marginBottom: 2,
+                background: isActive ? "rgba(55, 138, 221, 0.15)" : "transparent",
+                color: isActive ? C.sideTxA : C.sideTx,
+                border: "none", cursor: "pointer", textAlign: "left",
+                fontSize: 13, fontWeight: isActive ? 600 : 500,
+                transition: "background 0.15s, color 0.15s",
+              }}
+            >
+              <span style={{
+                fontSize: 10, fontFamily: "ui-monospace, monospace",
+                color: isActive ? C.acc : C.sideTx, opacity: isActive ? 1 : 0.6,
+                width: 22,
+              }}>{s.num}</span>
+              <span>{s.label}</span>
+              {isActive && (
+                <span style={{ marginLeft: "auto", width: 4, height: 16, background: C.acc, borderRadius: 2 }} />
+              )}
+            </button>
+          );
+        })}
+      </nav>
+
+      <div style={{ padding: "14px 18px", borderTop: `1px solid ${C.sideBd}`, fontSize: 11, color: C.sideTx, lineHeight: 1.5 }}>
+        Сохранение коммитит<br/>в <code style={{ color: C.acc }}>main</code> · Netlify деплоит ~30 сек
+      </div>
+    </aside>
+  );
 }
 
-function Reveal({ children, delay = 0, style = {} }) {
-  const [ref, vis] = useInView();
+/* ───────────────────────────  TOPBAR  ─────────────────────────── */
+function Topbar({ isDirty, saveStatus, saveError, onSave, onReset }) {
+  const saving = saveStatus === "saving";
+
   return (
-    <div ref={ref} style={{ opacity: vis ? 1 : 0, transform: vis ? "translateY(0)" : "translateY(24px)", transition: `opacity 0.55s ease ${delay}ms, transform 0.55s ease ${delay}ms`, ...style }}>
+    <header style={{
+      height: 64, flexShrink: 0, background: C.card, borderBottom: `1px solid ${C.bd}`,
+      display: "flex", alignItems: "center", justifyContent: "space-between",
+      padding: "0 32px", gap: 16,
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: C.tx }}>Content editor</span>
+        <DirtyBadge isDirty={isDirty} saveStatus={saveStatus} saveError={saveError} />
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        {isDirty && (
+          <button onClick={onReset} className="btn-ghost" style={btnGhostStyle}>
+            Reset
+          </button>
+        )}
+        <a href="/" target="_blank" rel="noreferrer" className="btn-ghost" style={{ ...btnGhostStyle, textDecoration: "none" }}>
+          View site ↗
+        </a>
+        <button
+          onClick={onSave}
+          disabled={saving || !isDirty}
+          className="btn-primary"
+          style={{
+            ...btnPrimaryStyle,
+            background: saveStatus === "success" ? C.ok : saveStatus === "error" ? C.danger : C.acc,
+            opacity: !isDirty && saveStatus === "idle" ? 0.5 : 1,
+            cursor: !isDirty || saving ? "not-allowed" : "pointer",
+          }}
+        >
+          {saving       ? "Publishing…" :
+           saveStatus === "success" ? "✓ Published" :
+           saveStatus === "error"   ? "Retry" :
+           "Publish to GitHub"}
+        </button>
+      </div>
+    </header>
+  );
+}
+
+function DirtyBadge({ isDirty, saveStatus, saveError }) {
+  if (saveStatus === "success")
+    return <Badge color={C.ok}>Deployed</Badge>;
+  if (saveStatus === "error")
+    return <Badge color={C.danger} title={saveError}>Error{saveError ? ": " + saveError : ""}</Badge>;
+  if (isDirty)
+    return <Badge color={C.warn}>Unsaved changes</Badge>;
+  return <Badge color={C.txDim} muted>Synced</Badge>;
+}
+
+function Badge({ children, color, muted, title }) {
+  return (
+    <span title={title} style={{
+      display: "inline-flex", alignItems: "center", gap: 6,
+      fontSize: 11, fontWeight: 500, letterSpacing: "0.02em",
+      padding: "4px 10px", borderRadius: 999,
+      color, background: muted ? "transparent" : color + "1a",
+      border: muted ? `1px solid ${C.bd}` : `1px solid ${color}33`,
+    }}>
+      <span style={{ width: 6, height: 6, borderRadius: "50%", background: color }} />
+      {children}
+    </span>
+  );
+}
+
+/* ───────────────────────────  SECTION  ─────────────────────────── */
+function Section({ id, num, title, subtitle, action, children }) {
+  return (
+    <section id={id} style={{ scrollMarginTop: 24, marginBottom: 56 }}>
+      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, marginBottom: 16 }}>
+        <div>
+          <div style={{ fontSize: 11, fontFamily: "ui-monospace, monospace", color: C.acc, letterSpacing: "0.1em", marginBottom: 4 }}>
+            {num}
+          </div>
+          <h2 style={{ fontSize: 22, fontWeight: 600, margin: 0, color: C.tx, letterSpacing: "-0.01em" }}>{title}</h2>
+          {subtitle && (
+            <p style={{ fontSize: 13, color: C.txMu, margin: "4px 0 0", lineHeight: 1.5 }}>{subtitle}</p>
+          )}
+        </div>
+        {action && <div>{action}</div>}
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {children}
+      </div>
+    </section>
+  );
+}
+
+function Card({ children, accent }) {
+  return (
+    <div style={{
+      background: C.card, border: `1px solid ${C.bd}`, borderRadius: 10,
+      padding: 20, borderLeft: accent ? `3px solid ${C.acc}` : `1px solid ${C.bd}`,
+      display: "flex", flexDirection: "column", gap: 14,
+    }}>
       {children}
     </div>
   );
 }
 
-const NAV = ["About", "Expertise", "Cases", "Experience", "Contact"];
-const BLUE      = "#185FA5";
-const BLUE_LT   = "#0C447C";
-const BLUE_BG_D = "#042C53";
-const BLUE_BG_L = "#E6F1FB";
-const BLUE_BD_D = "#185FA5";
-const BLUE_BD_L = "#85B7EB";
-const GREEN     = "#1D9E75";
-const GREEN_D   = "#04342C";
-const GREEN_L   = "#E1F5EE";
-const GREEN_BD_D = "#0F6E56";
-const GREEN_BD_L = "#5DCAA5";
-const ACCENT_D  = "#378ADD";
-const ACCENT_L  = "#185FA5";
-
-const FLOW_STEPS = [
-  { label: "Discovery",    points: ["Stakeholder interviews", "Business context analysis", "Problem framing", "Scope definition"] },
-  { label: "Requirements", points: ["User stories & use cases", "V&S, SRS, BRD artifacts", "Prototypes in Figma", "Acceptance criteria"] },
-  { label: "Delivery",     points: ["Dev team support", "Change management", "Testing & validation", "Demo presentations"] },
-  { label: "Support",      points: ["Post-release monitoring", "Backlog refinement", "Stakeholder sync", "Knowledge base"] },
-];
-
-function StatIcon({ index, acc }) {
-  const s = { position: "absolute", right: 12, bottom: 10, opacity: 0, transition: "opacity 0.3s", pointerEvents: "none" };
-  if (index === 3) {
-    return (
-      <svg className="stat-icon" style={s} width="56" height="56" viewBox="0 0 56 56">
-        <text x="4" y="50" fontSize="56" fontWeight="300" fill="none"
-          stroke={acc} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-          fontFamily="system-ui, sans-serif">&</text>
-      </svg>
-    );
-  }
-  const paths = [
-    "M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5",
-    "M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11",
-    "M14.5 2.5a5 5 0 00-5 5c0 .96.27 1.85.74 2.6L2.5 18a2 2 0 002.83 2.83L13 13.26A5 5 0 1014.5 2.5zM14.5 10a2.5 2.5 0 110-5 2.5 2.5 0 010 5z",
-  ];
+function ItemHeader({ title, subtitle, hidden, onToggleHidden, onRemove }) {
   return (
-    <svg className="stat-icon" style={s} width="56" height="56" viewBox="0 0 24 24" fill="none"
-      stroke={acc} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d={paths[index]} />
-    </svg>
-  );
-}
-
-function FlowDivider({ acc, border, textSec, d }) {
-  const [active, setActive] = useState(null);
-  return (
-    <div style={{ padding: "24px 0", borderBottom: `0.5px solid ${border}` }}>
-      <div style={{ display: "flex", alignItems: "flex-start", width: "100%" }}>
-        {FLOW_STEPS.map((step, i) => (
-          <div key={step.label} style={{ display: "flex", flex: 1, alignItems: "flex-start", minWidth: 0 }}>
-            <div
-              onMouseEnter={() => setActive(i)}
-              onMouseLeave={() => setActive(null)}
-              style={{
-                flex: 1, minWidth: 0, cursor: "default", overflow: "hidden",
-                border: `0.8px solid ${active === i ? acc : (d ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)")}`,
-                borderRadius: 8,
-                background: active === i ? (d ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)") : "transparent",
-                transition: "border-color 0.2s, background 0.2s, box-shadow 0.2s",
-                boxShadow: active === i ? `0 0 20px ${d ? "rgba(56,139,237,0.32)" : "rgba(56,139,237,0.18)"}` : "none",
-              }}
-            >
-              <div style={{ height: 42, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <span style={{
-                  fontSize: 13, letterSpacing: "0.04em", color: acc,
-                  opacity: active === i ? (d ? 0.9 : 0.85) : (d ? 0.55 : 0.5),
-                  transition: "opacity 0.2s",
-                }}>{step.label}</span>
-              </div>
-              <div style={{ overflow: "hidden", maxHeight: active === i ? 200 : 0, opacity: active === i ? 1 : 0, transition: "max-height 0.3s ease, opacity 0.25s ease" }}>
-                <div style={{ height: "0.5px", background: acc, opacity: 0.2, margin: "0 20px 14px" }} />
-                <div style={{ padding: "0 24px 18px 24px" }}>
-                  {step.points.map(p => (
-                    <div key={p} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 9 }}>
-                      <span style={{ width: 4, height: 1, background: acc, opacity: 0.4, flexShrink: 0, display: "inline-block" }} />
-                      <span style={{ fontSize: 14, color: textSec, lineHeight: 1.7 }}>{p}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-            {i < 3 && (
-              <div style={{ width: 28, flexShrink: 0, height: 42, display: "flex", alignItems: "center", justifyContent: "center", gap: 1 }}>
-                {[0.25, 0.4, 0.6].map((op, j) => (
-                  <svg key={j} width="8" height="12" viewBox="0 0 10 14" fill="none">
-                    <path d="M2 2L8 7L2 12" stroke={acc} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" opacity={d ? op + 0.1 : op} />
-                  </svg>
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-export default function Site() {
-  const [data, setData] = useState(null);
-  const [dark, setDark] = useState(false);
-  const [openCase, setOpenCase] = useState(null);
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
-  const [nodeGlow, setNodeGlow] = useState(false);
-  const [socialsOpen, setSocialsOpen] = useState(false);
-
-  useEffect(() => { fetch("/content.json").then(r => r.json()).then(setData); }, []);
-
-  useEffect(() => {
-    const hour = new Date().getHours();
-    const isNight = hour >= 20 || hour < 7;
-    const sys = window.matchMedia("(prefers-color-scheme: dark)");
-    setDark(isNight || sys.matches);
-  }, []);
-
-  useEffect(() => {
-    const h = () => {
-      setScrolled(window.scrollY > 20);
-      setNodeGlow(window.scrollY > 60);
-    };
-    window.addEventListener("scroll", h);
-    return () => window.removeEventListener("scroll", h);
-  }, []);
-
-  const scrollTo = id => {
-    document.getElementById(id.toLowerCase())?.scrollIntoView({ behavior: "smooth" });
-    setMobileOpen(false);
-  };
-
-  if (!data) return <div style={{ padding: 40, fontFamily: "sans-serif" }}>Loading...</div>;
-
-  const d = dark;
-  const bg      = d ? "#0f0f0f" : "#ffffff";
-  const bg2     = d ? "#1a1a1a" : "#f7f6f3";
-  const bg3     = d ? "#222"    : "#f0efe9";
-  const text    = d ? "#e8e6de" : "#1a1a1a";
-  const textSec = d ? "#888780" : "#6b6a64";
-  const textTer = d ? "#555350" : "#9a9890";
-  const border  = d ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)";
-  const borderMd= d ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)";
-  const acc     = d ? ACCENT_D : ACCENT_L;
-  const GLOW    = "rgba(56,139,237,0.18)";
-  const GLOW_HV = "rgba(56,139,237,0.32)";
-  const GLOW_BD = "rgba(56,139,237,0.35)";
-
-  // node graph colors — animate on scroll
-  const nodeStroke  = nodeGlow ? acc         : (d ? "#888" : "#bbb");
-  const nodeFill    = nodeGlow ? acc         : (d ? "#666" : "#aaa");
-  const lineOp  = (base) => nodeGlow ? Math.min(base * 2.2, 0.65) : base;
-  const circOp  = (base) => nodeGlow ? Math.min(base * 1.8, 0.7)  : base;
-
-  const badgeBlueText = d ? BLUE    : BLUE_LT;
-  const badgeBlueBg   = d ? BLUE_BG_D : BLUE_BG_L;
-  const badgeBlueBd   = d ? BLUE_BD_D : BLUE_BD_L;
-  const badgeGrText   = d ? GREEN   : "#085041";
-  const badgeGrBg     = d ? GREEN_D : GREEN_L;
-  const badgeGrBd     = d ? GREEN_BD_D : GREEN_BD_L;
-
-  const css = `
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: ${bg}; }
-    a { color: inherit; text-decoration: none; }
-    button { font-family: inherit; cursor: pointer; }
-    @keyframes fadeUp { from{opacity:0;transform:translateY(30px)} to{opacity:1;transform:translateY(0)} }
-    @keyframes pulse  { 0%,100%{opacity:1} 50%{opacity:0.4} }
-    .hero-name  { animation: fadeUp 0.7s ease forwards; }
-    .hero-role  { animation: fadeUp 0.7s ease 0.1s both; }
-    .hero-tag   { animation: fadeUp 0.7s ease 0.18s both; }
-    .hero-cta   { animation: fadeUp 0.7s ease 0.26s both; }
-    .hero-stats { animation: fadeUp 0.7s ease 0.32s both; }
-    .nav-link:hover { color: ${text} !important; }
-    .exp-row:hover  { background: ${bg3} !important; }
-    .case-btn:hover { background: ${bg2} !important; }
-    .exp-card { transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s; }
-    .exp-card:hover { border-color: ${GLOW_BD} !important; transform: translateY(-2px); box-shadow: 0 0 18px ${GLOW_HV}; }
-    .logo { transition: color 0.2s; }
-    .logo:hover .logo-acc { color: ${acc} !important; }
-    .logo:hover .logo-at  { color: ${GREEN} !important; }
-    .logo-at { color: ${textTer}; transition: color 0.2s; }
-    .glow-stat { transition: box-shadow 0.2s; }
-    .glow-stat:hover { box-shadow: 0 0 20px ${GLOW_HV}; }
-    .glow-stat:hover .stat-icon { opacity: ${d ? "0.14" : "0.09"} !important; }
-    .glow-case { transition: box-shadow 0.2s, border-color 0.2s; box-shadow: 0 0 8px ${GLOW}; }
-    .glow-case:hover { box-shadow: 0 0 22px ${GLOW_HV}; border-color: ${GLOW_BD} !important; }
-    .glow-btn { transition: box-shadow 0.2s; }
-    .glow-btn:hover { box-shadow: 0 0 16px ${GLOW_HV}; }
-    .exp-card { overflow: visible !important; }
-    .more-socials:hover .more-dropdown { max-width: 220px !important; opacity: 1 !important; }
-    .more-socials:hover .more-trigger { color: ${text} !important; }
-    .node-el { transition: stroke 1s ease, fill 1s ease, opacity 1s ease; }
-    @media (max-width: 640px) {
-      .hero-grid  { flex-direction: column !important; }
-      .about-grid { grid-template-columns: 1fr !important; }
-      .exp-grid   { grid-template-columns: 1fr 1fr !important; }
-      .case-cols  { grid-template-columns: 1fr !important; }
-      .nav-desktop    { display: none !important; }
-      .nav-mobile-btn { display: flex !important; }
-      .big { font-size: 32px !important; }
-    }
-    @media (min-width: 641px) {
-      .nav-mobile-btn { display: none !important; }
-      .mobile-menu    { display: none !important; }
-    }
-  `;
-
-  const sectionStyle = { padding: "100px 0", borderBottom: `0.5px solid ${border}` };
-  const labelStyle   = { fontSize: 12, fontWeight: 500, letterSpacing: "0.1em", textTransform: "uppercase", color: textTer, marginBottom: 14 };
-  const h2Style      = { fontSize: 36, fontWeight: 500, marginBottom: 48, lineHeight: 1.15, color: text };
-
-  function Tag({ children, accent }) {
-    return (
-      <span style={{
-        display: "inline-block", padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 500, letterSpacing: "0.02em",
-        background: accent ? badgeBlueBg : (d ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.05)"),
-        color: accent ? badgeBlueText : (d ? "rgba(255,255,255,0.55)" : "rgba(0,0,0,0.5)"),
-        border: accent ? `0.5px solid ${badgeBlueBd}` : `0.5px solid ${d ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
-      }}>{children}</span>
-    );
-  }
-
-  return (
-    <div style={{ fontFamily: "system-ui, sans-serif", color: text, background: bg, lineHeight: 1.6, fontSize: 15, minHeight: "100vh" }}>
-      <style>{css}</style>
-
-      {/* NAV */}
-      <nav style={{
-        position: "sticky", top: 0, zIndex: 100,
-        background: scrolled ? (d ? "rgba(15,15,15,0.92)" : "rgba(255,255,255,0.92)") : bg,
-        backdropFilter: scrolled ? "blur(12px)" : "none",
-        borderBottom: `0.5px solid ${scrolled ? border : "transparent"}`,
-        boxShadow: scrolled ? `0 1px 20px ${GLOW}` : "none",
-        transition: "background 0.3s, border-color 0.3s, box-shadow 0.3s",
-      }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 40px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 56 }}>
-          <span className="logo" style={{ fontWeight: 500, fontSize: 22, letterSpacing: "-0.01em", display: "flex", alignItems: "baseline", gap: 0, cursor: "default", color: text }}>
-            <span className="logo-at" style={{ fontSize: 18 }}>@</span>
-            <span className="logo-acc" style={{ color: textSec, transition: "color 0.2s" }}>a</span>
-            <span style={{ color: textSec }}>les</span>
-            <span className="logo-acc" style={{ color: textSec, transition: "color 0.2s" }}>f</span>
-            <span style={{ color: textSec }}>ilipenka</span>
+    <div style={{
+      display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+      paddingBottom: 12, borderBottom: `1px dashed ${C.bd}`,
+    }}>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <span style={{ fontWeight: 600, fontSize: 14, color: hidden ? C.txDim : C.tx, textDecoration: hidden ? "line-through" : "none" }}>
+            {title}
           </span>
-          <div className="nav-desktop" style={{ display: "flex", gap: 4, alignItems: "center" }}>
-            {NAV.filter(n => n !== "Contact").map(n => (
-              <button key={n} className="nav-link" onClick={() => scrollTo(n)}
-                style={{ background: "none", border: "none", padding: "6px 12px", fontSize: 13, color: textSec, borderRadius: 6, transition: "color 0.15s" }}>
-                {n}
-              </button>
-            ))}
-            <div style={{ width: "0.5px", height: 16, background: border, margin: "0 4px" }} />
-            <a href={`mailto:${data?.hero?.email}`} className="nav-link"
-              style={{ padding: "6px 10px", fontSize: 13, color: textSec, borderRadius: 6, transition: "color 0.15s", display: "flex", alignItems: "center", gap: 5 }}>
-              <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
-              </svg>
-              Email
-            </a>
-            <a href={data?.hero?.linkedin} target="_blank" rel="noreferrer" className="nav-link"
-              style={{ padding: "6px 10px", fontSize: 13, color: textSec, borderRadius: 6, transition: "color 0.15s", display: "flex", alignItems: "center", gap: 5 }}>
-              <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M16 8a6 6 0 016 6v7h-4v-7a2 2 0 00-2-2 2 2 0 00-2 2v7h-4v-7a6 6 0 016-6zM2 9h4v12H2z"/><circle cx="4" cy="4" r="2"/>
-              </svg>
-              LinkedIn
-            </a>
-            {/* More socials */}
-            <div className="more-socials" style={{ position: "relative", display: "flex", alignItems: "center" }}>
-              <button className="more-trigger nav-link" style={{ background: "none", border: "none", padding: "6px 8px", fontSize: 16, color: textSec, borderRadius: 6, letterSpacing: 2, lineHeight: 1, transition: "color 0.15s", cursor: "pointer" }}>···</button>
-              <div className="more-dropdown" style={{
-                display: "flex", alignItems: "center", gap: 2,
-                overflow: "hidden", maxWidth: 0, opacity: 0,
-                transition: "max-width 0.35s ease, opacity 0.25s ease",
-                whiteSpace: "nowrap",
-              }}>
-                <a href={data?.hero?.instagram || "https://instagram.com"} target="_blank" rel="noreferrer" className="nav-link"
-                  style={{ padding: "6px 8px", fontSize: 13, color: textSec, borderRadius: 6, transition: "color 0.15s", display: "flex", alignItems: "center", gap: 5 }}>
-                  <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="0.5" fill="currentColor"/>
-                  </svg>
-                  Instagram
-                </a>
-                <a href={data?.hero?.telegram || "https://t.me"} target="_blank" rel="noreferrer" className="nav-link"
-                  style={{ padding: "6px 8px", fontSize: 13, color: textSec, borderRadius: 6, transition: "color 0.15s", display: "flex", alignItems: "center", gap: 5 }}>
-                  <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M22 2L11 13M22 2L15 22l-4-9-9-4 20-7z"/>
-                  </svg>
-                  Telegram
-                </a>
-              </div>
-            </div>
-            <button onClick={() => setDark(!d)}
-              style={{ background: "none", border: `0.5px solid ${border}`, borderRadius: 8, padding: "6px 8px", color: textSec, marginLeft: 4, display: "flex", alignItems: "center", transition: "color 0.15s, border-color 0.15s" }}
-              onMouseEnter={e => { e.currentTarget.style.color = acc; e.currentTarget.style.borderColor = acc; }}
-              onMouseLeave={e => { e.currentTarget.style.color = textSec; e.currentTarget.style.borderColor = border; }}>
-              <Icon type={d ? "sun" : "moon"} size={15} />
-            </button>
-          </div>
-          <div className="nav-mobile-btn" style={{ gap: 8, alignItems: "center" }}>
-            <button onClick={() => setDark(!d)} style={{ background: "none", border: `0.5px solid ${border}`, borderRadius: 8, padding: "6px 8px", color: textSec, display: "flex" }}>
-              <Icon type={d ? "sun" : "moon"} size={15} />
-            </button>
-            <button onClick={() => setMobileOpen(!mobileOpen)} style={{ background: "none", border: "none", color: text, display: "flex" }}>
-              <Icon type={mobileOpen ? "close" : "menu"} size={20} />
-            </button>
-          </div>
+          {hidden && <Badge color={C.txDim}>Hidden</Badge>}
         </div>
-      </nav>
+        {subtitle && <div style={{ fontSize: 12, color: C.txMu, marginTop: 2 }}>{subtitle}</div>}
+      </div>
 
-      {mobileOpen && (
-        <div className="mobile-menu" style={{ background: bg2, borderBottom: `0.5px solid ${border}`, padding: "8px 0", position: "sticky", top: 56, zIndex: 99 }}>
-          {NAV.map(n => (
-            <button key={n} onClick={() => scrollTo(n)}
-              style={{ display: "block", width: "100%", textAlign: "left", padding: "12px 32px", background: "none", border: "none", fontSize: 15, color: text }}>
-              {n}
-            </button>
-          ))}
-        </div>
-      )}
-
-      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 40px" }}>
-
-        {/* HERO */}
-        <section style={{ minHeight: "100vh", padding: "80px 0", borderBottom: `0.5px solid ${border}`, position: "relative", overflow: "visible", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-          <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", overflow: "hidden" }} viewBox="0 0 1200 700" preserveAspectRatio="xMaxYMid slice">
-            <line className="node-el" x1="780" y1="80"  x2="920" y2="180" stroke={nodeStroke} strokeWidth="0.6" opacity={lineOp(.25)}/>
-            <line className="node-el" x1="920" y1="180" x2="1020" y2="110" stroke={nodeStroke} strokeWidth="0.6" opacity={lineOp(.25)}/>
-            <line className="node-el" x1="920" y1="180" x2="960"  y2="320" stroke={nodeStroke} strokeWidth="0.6" opacity={lineOp(.25)}/>
-            <line className="node-el" x1="960" y1="320" x2="1080" y2="280" stroke={nodeStroke} strokeWidth="0.6" opacity={lineOp(.2)}/>
-            <line className="node-el" x1="960" y1="320" x2="880"  y2="420" stroke={nodeStroke} strokeWidth="0.6" opacity={lineOp(.2)}/>
-            <line className="node-el" x1="780" y1="80"  x2="850"  y2="30"  stroke={nodeStroke} strokeWidth="0.6" opacity={lineOp(.15)}/>
-            <line className="node-el" x1="1020" y1="110" x2="1100" y2="50"  stroke={nodeStroke} strokeWidth="0.6" opacity={lineOp(.15)}/>
-            <line className="node-el" x1="1080" y1="280" x2="1150" y2="360" stroke={nodeStroke} strokeWidth="0.6" opacity={lineOp(.12)}/>
-            <line className="node-el" x1="880"  y1="420" x2="800"  y2="480" stroke={nodeStroke} strokeWidth="0.6" opacity={lineOp(.12)}/>
-            <circle className="node-el" cx="780"  cy="80"  r="4"   fill={nodeFill} opacity={circOp(.4)}/>
-            <circle className="node-el" cx="920"  cy="180" r="6"   fill={nodeFill} opacity={circOp(.5)}/>
-            <circle className="node-el" cx="1020" cy="110" r="3.5" fill={nodeFill} opacity={circOp(.35)}/>
-            <circle className="node-el" cx="960"  cy="320" r="5.5" fill={nodeFill} opacity={circOp(.45)}/>
-            <circle className="node-el" cx="1080" cy="280" r="3"   fill={nodeFill} opacity={circOp(.28)}/>
-            <circle className="node-el" cx="880"  cy="420" r="3"   fill={nodeFill} opacity={circOp(.25)}/>
-            <circle className="node-el" cx="850"  cy="30"  r="2"   fill={nodeFill} opacity={circOp(.2)}/>
-            <circle className="node-el" cx="1100" cy="50"  r="2"   fill={nodeFill} opacity={circOp(.2)}/>
-            <circle className="node-el" cx="1150" cy="360" r="2"   fill={nodeFill} opacity={circOp(.15)}/>
-            <circle className="node-el" cx="800"  cy="480" r="2"   fill={nodeFill} opacity={circOp(.12)}/>
-          </svg>
-
-          <div className="hero-grid" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 60, flexWrap: "wrap", position: "relative" }}>
-            <div style={{ flex: 1, minWidth: 320 }}>
-              {data.hero.avatar && (
-                <img className="hero-name" src={data.hero.avatar} alt={data.hero.name}
-                  style={{ width: 88, height: 88, borderRadius: "50%", objectFit: "cover", border: `2px solid ${borderMd}`, display: "block", marginBottom: 20 }} />
-              )}
-              <h1 className="big hero-name" style={{ fontSize: 52, fontWeight: 500, margin: "0 0 8px", lineHeight: 1.05, color: text }}>{data.hero.name}</h1>
-              <p className="hero-role" style={{ fontSize: 20, color: textSec, margin: "0 0 16px" }}>{data.hero.title}</p>
-              {data.hero.available && (
-                <div className="hero-tag" style={{ marginBottom: 18 }}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: badgeGrText, background: badgeGrBg, padding: "4px 12px", borderRadius: 20, border: `0.5px solid ${badgeGrBd}` }}>
-                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: GREEN, display: "inline-block", animation: "pulse 2s infinite" }} />
-                    Available for projects
-                  </span>
-                </div>
-              )}
-              <p className="hero-tag" style={{ fontSize: 16, color: textSec, margin: "0 0 36px", maxWidth: 500, lineHeight: 1.75 }}>{data.hero.tagline}</p>
-              <div className="hero-cta" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                <a href={`mailto:${data.hero.email}`} className="glow-btn" style={{ padding: "10px 24px", borderRadius: 8, fontSize: 13, fontWeight: 500, background: text, color: bg }}>Get in touch</a>
-                <a href={data.hero.linkedin} className="glow-btn" style={{ padding: "10px 24px", borderRadius: 8, fontSize: 13, border: `0.5px solid ${borderMd}`, color: text }}>LinkedIn</a>
-              </div>
-            </div>
-            <div className="hero-stats" style={{ flexShrink: 0, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, alignSelf: "center", padding: 8, margin: -8 }}>
-              {data.stats.map((s, si) => (
-                <div key={s.label} className="glow-stat" style={{ background: bg2, borderRadius: 12, padding: "20px 28px", minWidth: 130, position: "relative", overflow: "hidden" }}>
-                  <StatIcon index={si} acc={acc} />
-                  <div style={{ fontSize: 30, fontWeight: 500, lineHeight: 1, color: text }}>{s.value}</div>
-                  <div style={{ fontSize: 12, color: textTer, marginTop: 6 }}>{s.label}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* FLOW DIVIDER */}
-        <FlowDivider acc={acc} border={border} text={text} textSec={textSec} bg={bg} bg2={bg2} d={d} />
-
-        {/* ABOUT */}
-        <section id="about" style={sectionStyle}>
-          <Reveal>
-            <p style={labelStyle}>About</p>
-            <div className="about-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 60, alignItems: "start" }}>
-              <div>
-                <h2 style={h2Style}>Professional story</h2>
-                <p style={{ color: textSec, lineHeight: 1.75, marginBottom: 20, fontSize: 15 }}>{data.about}</p>
-              </div>
-              <div>
-                <div style={{ marginBottom: 24 }}>
-                  <p style={{ ...labelStyle, marginBottom: 10 }}>Domains</p>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                    {data.domains.map(dm => <Tag key={dm} accent>{dm}</Tag>)}
-                  </div>
-                </div>
-                <div>
-                  <p style={{ ...labelStyle, marginBottom: 10 }}>Regions</p>
-                  <p style={{ fontSize: 14, color: textSec }}>CIS · Europe · North America</p>
-                </div>
-              </div>
-            </div>
-          </Reveal>
-        </section>
-
-        {/* EXPERTISE */}
-        <section id="expertise" style={sectionStyle}>
-          <Reveal>
-            <p style={labelStyle}>What I do</p>
-            <h2 style={h2Style}>Expertise</h2>
-          </Reveal>
-          <div className="exp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 14 }}>
-            {data.expertise.map((e, i) => (
-              <Reveal key={e.id} delay={i * 60}>
-                <div className="exp-card" style={{ background: bg, border: `0.5px solid ${border}`, borderRadius: 12, padding: "22px 22px 24px", height: "100%", position: "relative", overflow: "hidden" }}>
-                  <div style={{ position: "absolute", top: 12, right: 14, fontSize: 22, fontWeight: 300, color: acc, opacity: d ? 0.3 : 0.25, fontFamily: "monospace", lineHeight: 1, letterSpacing: -2 }}>{"{ }"}</div>
-                  <div style={{ color: textSec, marginBottom: 12 }}>
-                    <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d={iconPath(e.icon)} />
-                    </svg>
-                  </div>
-                  <p style={{ fontWeight: 500, fontSize: 14, margin: "0 0 8px", color: text }}>{e.title}</p>
-                  <p style={{ fontSize: 13, color: textSec, lineHeight: 1.6 }}>{e.desc}</p>
-                </div>
-              </Reveal>
-            ))}
-          </div>
-        </section>
-
-        {/* CASES */}
-        <section id="cases" style={sectionStyle}>
-          <Reveal>
-            <p style={labelStyle}>Selected work</p>
-            <h2 style={h2Style}>Cases</h2>
-          </Reveal>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {data.cases.map((c, i) => (
-              <Reveal key={c.id} delay={i * 60}>
-                <div className="glow-case" style={{ border: `0.5px solid ${border}`, borderRadius: 12, overflow: "hidden" }}>
-                  <button className="case-btn" onClick={() => setOpenCase(openCase === c.id ? null : c.id)}
-                    style={{ width: "100%", background: "none", border: "none", padding: "20px 24px", textAlign: "left", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, transition: "background 0.15s" }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10, marginBottom: 6 }}>
-                        <p style={{ fontWeight: 500, fontSize: 15, color: text }}>{c.title}</p>
-                        <Tag accent>{c.domain}</Tag>
-                      </div>
-                      <p style={{ fontSize: 13, color: textTer }}>{c.company} · {c.period}</p>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 8 }}>
-                        {c.tags.map(t => <Tag key={t}>{t}</Tag>)}
-                      </div>
-                    </div>
-                    <span style={{ fontSize: 16, color: textTer, flexShrink: 0, transform: openCase === c.id ? "rotate(180deg)" : "none", transition: "transform 0.25s" }}>↓</span>
-                  </button>
-                  <div style={{ maxHeight: openCase === c.id ? 400 : 0, overflow: "hidden", transition: "max-height 0.35s ease" }}>
-                    <div style={{ padding: "20px 24px 24px", borderTop: `0.5px solid ${border}` }}>
-                      <div className="case-cols" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 24 }}>
-                        {[["Context", c.context], ["Task", c.task], ["Result", c.result]].map(([l, v]) => (
-                          <div key={l}>
-                            <p style={{ fontSize: 11, fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: textTer, marginBottom: 8 }}>{l}</p>
-                            <p style={{ fontSize: 14, color: textSec, lineHeight: 1.7 }}>{v}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </Reveal>
-            ))}
-          </div>
-        </section>
-
-        {/* EXPERIENCE */}
-        <section id="experience" style={sectionStyle}>
-          <Reveal>
-            <p style={labelStyle}>Career</p>
-            <h2 style={h2Style}>Experience</h2>
-          </Reveal>
-          <div style={{ display: "flex", flexDirection: "column" }}>
-            {data.experience.map((e, i) => (
-              <Reveal key={e.id} delay={i * 50}>
-                <div className="exp-row" style={{ display: "flex", gap: 16, padding: "16px 12px", borderBottom: `0.5px solid ${border}`, alignItems: "center", borderRadius: 8, transition: "background 0.15s" }}>
-                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: e.current ? GREEN : borderMd, flexShrink: 0 }} />
-                  <div style={{ flex: 1 }}>
-                    <p style={{ fontWeight: 500, fontSize: 14, color: text }}>{e.company}</p>
-                    <p style={{ fontSize: 13, color: textSec, marginTop: 2 }}>{e.role}</p>
-                  </div>
-                  <span style={{ fontSize: 13, color: textTer, flexShrink: 0 }}>{e.period}</span>
-                </div>
-              </Reveal>
-            ))}
-          </div>
-          <Reveal delay={200}>
-            <div style={{ marginTop: 44 }}>
-              <p style={{ ...labelStyle, marginBottom: 14 }}>Stack & tools</p>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {data.stack.map(s => <Tag key={s}>{s}</Tag>)}
-              </div>
-            </div>
-          </Reveal>
-        </section>
-
-        {/* CONTACT */}
-        <section id="contact" style={{ padding: "80px 0 100px" }}>
-          <Reveal>
-            <p style={labelStyle}>Contact</p>
-            <h2 style={h2Style}>Let's work together</h2>
-            <p style={{ color: textSec, maxWidth: 480, marginBottom: 32, lineHeight: 1.75, fontSize: 15 }}>
-              Open to new projects, long-term contracts, and interesting challenges. Reach out directly or connect on LinkedIn.
-            </p>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <a href={`mailto:${data.hero.email}`} className="glow-btn" style={{ padding: "11px 26px", borderRadius: 8, fontSize: 13, fontWeight: 500, background: text, color: bg }}>{data.hero.email}</a>
-              <a href={data.hero.linkedin} className="glow-btn" style={{ padding: "11px 26px", borderRadius: 8, fontSize: 13, border: `0.5px solid ${borderMd}`, color: text }}>LinkedIn</a>
-            </div>
-            <p style={{ fontSize: 12, color: textTer, marginTop: 44 }}>{data.hero.location} — available for remote projects globally</p>
-          </Reveal>
-        </section>
-
+      <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+        <button
+          onClick={onToggleHidden}
+          title={hidden ? "Показать на сайте" : "Скрыть на сайте"}
+          className="icon-btn"
+          style={iconBtnStyle}
+        >
+          {hidden ? <EyeOff /> : <Eye />}
+        </button>
+        <button
+          onClick={onRemove}
+          title="Удалить"
+          className="icon-btn icon-btn--danger"
+          style={iconBtnStyle}
+        >
+          <Trash />
+        </button>
       </div>
     </div>
+  );
+}
+
+/* ───────────────────────────  FIELDS  ─────────────────────────── */
+function Row({ children }) {
+  return <div style={{ display: "grid", gridTemplateColumns: `repeat(${children.length}, 1fr)`, gap: 12 }}>{children}</div>;
+}
+
+function Field({ label, value, onChange, type = "text", options, rows = 3 }) {
+  const id = useId();
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
+      <label htmlFor={id} style={labelStyle}>{label}</label>
+      {type === "textarea" ? (
+        <textarea
+          id={id}
+          className="input"
+          value={value ?? ""}
+          onChange={e => onChange(e.target.value)}
+          rows={rows}
+          style={{ ...inputBaseStyle, resize: "vertical", minHeight: 72 }}
+        />
+      ) : type === "select" ? (
+        <select
+          id={id}
+          className="input"
+          value={value ?? ""}
+          onChange={e => onChange(e.target.value)}
+          style={inputBaseStyle}
+        >
+          {(options || []).map(o => <option key={o} value={o}>{o}</option>)}
+        </select>
+      ) : (
+        <input
+          id={id}
+          className="input"
+          type="text"
+          value={value ?? ""}
+          onChange={e => onChange(e.target.value)}
+          style={inputBaseStyle}
+        />
+      )}
+    </div>
+  );
+}
+
+function Toggle({ label, hint, checked, onChange }) {
+  return (
+    <label style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }}>
+      <span
+        onClick={() => onChange(!checked)}
+        style={{
+          width: 36, height: 20, borderRadius: 999, padding: 2,
+          background: checked ? C.acc : "#d4d4d8",
+          transition: "background 0.18s", flexShrink: 0,
+          display: "flex", alignItems: "center",
+        }}
+      >
+        <span style={{
+          width: 16, height: 16, borderRadius: "50%", background: "#fff",
+          transform: checked ? "translateX(16px)" : "translateX(0)",
+          transition: "transform 0.18s", boxShadow: "0 1px 2px rgba(0,0,0,0.15)",
+        }} />
+      </span>
+      <span>
+        <span style={{ fontSize: 13, fontWeight: 500, color: C.tx, display: "block" }}>{label}</span>
+        {hint && <span style={{ fontSize: 12, color: C.txMu }}>{hint}</span>}
+      </span>
+    </label>
+  );
+}
+
+function TagEditor({ label, tags, onChange, placeholder, accent }) {
+  const [input, setInput] = useState("");
+  const add = () => {
+    const v = input.trim();
+    if (!v) return;
+    if (tags.includes(v)) { setInput(""); return; }
+    onChange([...tags, v]);
+    setInput("");
+  };
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <label style={labelStyle}>{label}</label>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        {tags.map((t, i) => (
+          <span key={t + i} style={{
+            display: "inline-flex", alignItems: "center", gap: 6,
+            padding: "5px 10px", borderRadius: 999, fontSize: 12,
+            background: accent ? C.accBg : "#f3f4f6",
+            color: accent ? C.accD : C.tx,
+            border: `1px solid ${accent ? "#cfe1f5" : C.bd}`,
+          }}>
+            {t}
+            <button
+              onClick={() => onChange(tags.filter((_, idx) => idx !== i))}
+              style={{
+                background: "transparent", border: "none", cursor: "pointer",
+                color: "inherit", opacity: 0.55, fontSize: 14, lineHeight: 1, padding: 0,
+              }}
+              title="Remove"
+            >×</button>
+          </span>
+        ))}
+        {tags.length === 0 && <span style={{ fontSize: 12, color: C.txDim }}>пусто</span>}
+      </div>
+      <div style={{ display: "flex", gap: 6 }}>
+        <input
+          className="input"
+          value={input}
+          placeholder={placeholder}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); add(); } }}
+          style={{ ...inputBaseStyle, flex: 1 }}
+        />
+        <button onClick={add} className="btn-ghost" style={btnGhostStyle}>Add</button>
+      </div>
+    </div>
+  );
+}
+
+/* ───────────────────────────  ICONS  ─────────────────────────── */
+const Eye    = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>;
+const EyeOff = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><path d="M1 1l22 22"/></svg>;
+const Trash  = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>;
+
+/* ───────────────────────────  STYLES  ─────────────────────────── */
+const labelStyle = {
+  fontSize: 11, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase",
+  color: C.txMu,
+};
+
+const inputBaseStyle = {
+  width: "100%", boxSizing: "border-box",
+  background: "#fff", color: C.tx,
+  border: `1px solid ${C.bd}`, borderRadius: 8,
+  padding: "9px 12px", fontSize: 13, lineHeight: 1.5,
+  outline: "none", fontFamily: "inherit",
+  transition: "border-color 0.15s, box-shadow 0.15s",
+};
+
+const btnPrimaryStyle = {
+  height: 36, padding: "0 16px", borderRadius: 8,
+  fontSize: 13, fontWeight: 600, color: "#fff",
+  background: C.acc, border: "none",
+  cursor: "pointer", letterSpacing: "0.01em",
+  transition: "background 0.15s, opacity 0.15s",
+};
+
+const btnGhostStyle = {
+  height: 36, padding: "0 14px", borderRadius: 8,
+  fontSize: 13, fontWeight: 500, color: C.tx,
+  background: "transparent", border: `1px solid ${C.bd}`,
+  cursor: "pointer", transition: "background 0.15s, border-color 0.15s",
+};
+
+const iconBtnStyle = {
+  width: 32, height: 32, padding: 0, borderRadius: 8,
+  display: "inline-flex", alignItems: "center", justifyContent: "center",
+  background: "transparent", border: `1px solid ${C.bd}`, color: C.txMu,
+  cursor: "pointer", transition: "all 0.15s",
+};
+
+function BtnGhost({ children, ...rest }) {
+  return <button {...rest} className="btn-ghost" style={btnGhostStyle}>{children}</button>;
+}
+
+function CenterMessage({ children, tone }) {
+  return (
+    <div style={{
+      minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
+      background: C.bg, color: tone === "danger" ? C.danger : C.tx,
+      fontFamily: "Inter, system-ui, sans-serif", fontSize: 14,
+    }}>{children}</div>
+  );
+}
+
+/* ───────────────────────────  GLOBAL CSS  ─────────────────────────── */
+function GlobalStyles() {
+  return (
+    <style>{`
+      .input:focus {
+        border-color: ${C.acc} !important;
+        box-shadow: 0 0 0 3px ${C.acc}26 !important;
+      }
+      .btn-primary:hover:not(:disabled) {
+        background: ${C.accD} !important;
+      }
+      .btn-ghost:hover {
+        background: ${C.bg};
+        border-color: ${C.bdH};
+      }
+      .icon-btn:hover {
+        background: ${C.bg};
+        color: ${C.tx};
+        border-color: ${C.bdH};
+      }
+      .icon-btn--danger:hover {
+        background: ${C.dangerBg};
+        color: ${C.danger};
+        border-color: #fecaca;
+      }
+      .side-link:hover {
+        background: rgba(255,255,255,0.04);
+        color: ${C.sideTxA};
+      }
+      ::selection { background: ${C.acc}40; }
+      input, textarea, select { font-family: inherit; }
+      * { box-sizing: border-box; }
+      ::-webkit-scrollbar { width: 10px; height: 10px; }
+      ::-webkit-scrollbar-thumb { background: ${C.bdH}; border-radius: 999px; border: 2px solid ${C.bg}; }
+      ::-webkit-scrollbar-thumb:hover { background: ${C.txDim}; }
+      ::-webkit-scrollbar-track { background: transparent; }
+    `}</style>
   );
 }

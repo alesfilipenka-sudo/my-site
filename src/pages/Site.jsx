@@ -148,7 +148,15 @@ export default function Site() {
   const [scrolled, setScrolled] = useState(false);
   const [nodeGlow, setNodeGlow] = useState(false);
 
-  useEffect(() => { fetch("/content.json").then(r => r.json()).then(setData); }, []);
+  useEffect(() => {
+    // Добавляем ?v=... чтобы браузер всегда скачивал свежий файл после паблиша
+    fetch(`/content.json?v=${Date.now()}`)
+      .then((res) => res.json())
+      .then((json) => {
+        setData(json);
+        setLoading(false);
+      });
+  }, []);
 
   useEffect(() => {
     const hour = new Date().getHours();
@@ -408,7 +416,7 @@ export default function Site() {
               </div>
             </div>
             <div className="hero-stats" style={{ flexShrink: 0, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, alignSelf: "center", padding: 8, margin: -8 }}>
-              {data.stats.map((s, si) => (
+              {data.stats.filter(s => !s.hidden).map((s, si) => (
                 <div key={s.label} className="glow-stat" style={{ background: bg2, borderRadius: 12, padding: "20px 28px", minWidth: 130, position: "relative", overflow: "hidden" }}>
                   <StatIcon index={si} acc={acc} />
                   <div style={{ fontSize: 30, fontWeight: 500, lineHeight: 1, color: text }}>{s.value}</div>
@@ -454,7 +462,7 @@ export default function Site() {
             <h2 style={h2Style}>Expertise</h2>
           </Reveal>
           <div className="exp-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 14 }}>
-            {data.expertise.map((e, i) => (
+            {data.expertise.filter(e => !e.hidden).map((e, i) => (
               <Reveal key={e.id} delay={i * 60}>
                 <div className="exp-card" style={{ background: bg, border: `0.5px solid ${border}`, borderRadius: 12, padding: "22px 22px 24px", height: "100%", position: "relative", overflow: "hidden" }}>
                   <div style={{ position: "absolute", top: 12, right: 14, fontSize: 22, fontWeight: 300, color: acc, opacity: d ? 0.3 : 0.25, fontFamily: "monospace", lineHeight: 1, letterSpacing: -2 }}>{"{ }"}</div>
@@ -478,7 +486,7 @@ export default function Site() {
             <h2 style={h2Style}>Cases</h2>
           </Reveal>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {data.cases.map((c, i) => (
+            {data.cases.filter(c => !c.hidden).map((c, i) => (
               <Reveal key={c.id} delay={i * 60}>
                 <div className="glow-case" style={{ border: `0.5px solid ${border}`, borderRadius: 12, overflow: "hidden" }}>
                   <button className="case-btn" onClick={() => setOpenCase(openCase === c.id ? null : c.id)}
@@ -520,7 +528,7 @@ export default function Site() {
             <h2 style={h2Style}>Experience</h2>
           </Reveal>
           <div style={{ display: "flex", flexDirection: "column" }}>
-            {data.experience.map((e, i) => (
+            {data.experience.filter(e => !e.hidden).map((e, i) => (
               <Reveal key={e.id} delay={i * 50}>
                 <div className="exp-row" style={{ display: "flex", gap: 16, padding: "16px 12px", borderBottom: `0.5px solid ${border}`, alignItems: "center", borderRadius: 8, transition: "background 0.15s" }}>
                   <div style={{ width: 8, height: 8, borderRadius: "50%", background: e.current ? GREEN : borderMd, flexShrink: 0 }} />
