@@ -55,6 +55,13 @@ const GREEN_BD_L = "#5DCAA5";
 const ACCENT_D  = "#378ADD";
 const ACCENT_L  = "#185FA5";
 
+const mobileSocialStyle = (text, border) => ({
+  display: "inline-flex", alignItems: "center", gap: 6,
+  padding: "8px 12px", borderRadius: 8,
+  border: `0.5px solid ${border}`, background: "transparent",
+  fontSize: 13, color: text, textDecoration: "none",
+});
+
 const FLOW_STEPS = [
   { label: "Discovery",    points: ["Stakeholder interviews", "Business context analysis", "Problem framing", "Scope definition"] },
   { label: "Requirements", points: ["User stories & use cases", "V&S, SRS, BRD artifacts", "Prototypes in Figma", "Acceptance criteria"] },
@@ -89,7 +96,7 @@ function StatIcon({ index, acc }) {
 function FlowDivider({ acc, border, textSec, d }) {
   const [active, setActive] = useState(null);
   return (
-    <div style={{ padding: "24px 0", borderBottom: `0.5px solid ${border}` }}>
+    <div className="flow-divider" style={{ padding: "24px 0", borderBottom: `0.5px solid ${border}` }}>
       <div style={{ display: "flex", alignItems: "flex-start", width: "100%" }}>
         {FLOW_STEPS.map((step, i) => (
           <div key={step.label} style={{ display: "flex", flex: 1, alignItems: "flex-start", minWidth: 0 }}>
@@ -210,7 +217,10 @@ export default function Site() {
 
   const css = `
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: ${bg}; }
+    html, body { background: ${bg}; margin: 0; padding: 0; }
+    @supports (padding: env(safe-area-inset-top)) {
+      .nav-bar { padding-top: env(safe-area-inset-top); }
+    }
     a { color: inherit; text-decoration: none; }
     button { font-family: inherit; cursor: pointer; }
     @keyframes fadeUp { from{opacity:0;transform:translateY(30px)} to{opacity:1;transform:translateY(0)} }
@@ -248,6 +258,7 @@ export default function Site() {
       .nav-desktop    { display: none !important; }
       .nav-mobile-btn { display: flex !important; }
       .big { font-size: 32px !important; }
+      .flow-divider   { display: none !important; }
     }
     @media (min-width: 641px) {
       .nav-mobile-btn { display: none !important; }
@@ -275,7 +286,7 @@ export default function Site() {
       <style>{css}</style>
 
       {/* NAV */}
-      <nav style={{
+      <nav className="nav-bar" style={{
         position: "sticky", top: 0, zIndex: 100,
         background: scrolled ? (d ? "rgba(15,15,15,0.92)" : "rgba(255,255,255,0.92)") : bg,
         backdropFilter: scrolled ? "blur(12px)" : "none",
@@ -357,13 +368,56 @@ export default function Site() {
       </nav>
 
       {mobileOpen && (
-        <div className="mobile-menu" style={{ background: bg2, borderBottom: `0.5px solid ${border}`, padding: "8px 0", position: "sticky", top: 56, zIndex: 99 }}>
+        <div className="mobile-menu" style={{ background: bg2, borderBottom: `0.5px solid ${border}`, padding: "8px 0 12px", position: "sticky", top: 56, zIndex: 99 }}>
           {NAV.map(n => (
             <button key={n} onClick={() => scrollTo(n)}
               style={{ display: "block", width: "100%", textAlign: "left", padding: "12px 32px", background: "none", border: "none", fontSize: 15, color: text }}>
               {n}
             </button>
           ))}
+          <div style={{ height: "0.5px", background: border, margin: "8px 32px" }} />
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, padding: "4px 32px 0" }}>
+            {data?.hero?.email && (
+              <a href={`mailto:${data.hero.email}`}
+                onClick={() => setMobileOpen(false)}
+                style={mobileSocialStyle(text, border)}>
+                <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
+                </svg>
+                Email
+              </a>
+            )}
+            {data?.hero?.linkedin && (
+              <a href={data.hero.linkedin} target="_blank" rel="noreferrer"
+                onClick={() => setMobileOpen(false)}
+                style={mobileSocialStyle(text, border)}>
+                <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M16 8a6 6 0 016 6v7h-4v-7a2 2 0 00-2-2 2 2 0 00-2 2v7h-4v-7a6 6 0 016-6zM2 9h4v12H2z"/><circle cx="4" cy="4" r="2"/>
+                </svg>
+                LinkedIn
+              </a>
+            )}
+            {data?.hero?.instagram && (
+              <a href={data.hero.instagram} target="_blank" rel="noreferrer"
+                onClick={() => setMobileOpen(false)}
+                style={mobileSocialStyle(text, border)}>
+                <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="0.5" fill="currentColor"/>
+                </svg>
+                Instagram
+              </a>
+            )}
+            {data?.hero?.telegram && (
+              <a href={data.hero.telegram} target="_blank" rel="noreferrer"
+                onClick={() => setMobileOpen(false)}
+                style={mobileSocialStyle(text, border)}>
+                <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M22 2L11 13M22 2L15 22l-4-9-9-4 20-7z"/>
+                </svg>
+                Telegram
+              </a>
+            )}
+          </div>
         </div>
       )}
 
