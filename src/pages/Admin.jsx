@@ -118,8 +118,8 @@ export default function Admin() {
     }
 
     try {
-      const getRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=main`, {
-        headers: { Authorization: `Bearer ${token}`, "Cache-Control": "no-cache" },
+      const getRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=main&t=${Date.now()}`, {
+        headers: { Authorization: `Bearer ${token}` },
       });
       if (!getRes.ok) throw new Error(`GET ${getRes.status}`);
       const fileData = await getRes.json();
