@@ -1,6 +1,6 @@
 {
   "hero": {
-    "name": "Alexander Filipenko",
+    "name": "Alexander Filipenka",
     "title": "Business Analyst",
     "tagline": "Bridging product, data, and delivery — 5 years, 10+ projects across fintech, e-commerce, gaming, and AI.",
     "email": "alesfilipenka@gmail.com",
@@ -12,17 +12,54 @@
   },
   "about": "Experienced BA with situational PM involvement and systems analysis background. Detail-oriented, precise, and flexible in finding the best solution for decision-makers. Worked with both Russian-speaking and English-speaking (C1) clients across CIS, Europe, and North America — up to 4 projects in parallel.",
   "stats": [
-    { "value": "5", "label": "years experience" },
-    { "value": "10+", "label": "projects delivered" },
-    { "value": "6", "label": "domains covered" },
-    { "value": "C1", "label": "English level" }
+    {
+      "value": "5",
+      "label": "years experience"
+    },
+    {
+      "value": "10+",
+      "label": "projects delivered"
+    },
+    {
+      "value": "6",
+      "label": "domains covered"
+    },
+    {
+      "value": "C1",
+      "label": "English level"
+    }
   ],
   "expertise": [
-    { "id": 1, "title": "Requirements & Docs", "desc": "V&S, SRS, BRD — full artifact lifecycle from discovery to sign-off.", "icon": "doc" },
-    { "id": 2, "title": "Systems & Integrations", "desc": "BPMN, UML, C4. Microservices mapping, API specs, data flow design.", "icon": "sys" },
-    { "id": 3, "title": "Prototyping & UX", "desc": "Figma wireframes and mockups aligned with dev-ready requirements.", "icon": "fig" },
-    { "id": 4, "title": "AI & Data", "desc": "AI product research, SQL queries, BI tools: Qlik, Tableau, Cognos.", "icon": "ai" },
-    { "id": 5, "title": "Stakeholder Management", "desc": "Expectation management, change control, demo presentations.", "icon": "ppl" }
+    {
+      "id": 1,
+      "title": "Requirements & Docs",
+      "desc": "V&S, SRS, BRD — full artifact lifecycle from discovery to sign-off.",
+      "icon": "doc"
+    },
+    {
+      "id": 2,
+      "title": "Systems & Integrations",
+      "desc": "BPMN, UML, C4. Microservices mapping, API specs, data flow design.",
+      "icon": "sys"
+    },
+    {
+      "id": 3,
+      "title": "Prototyping & UX",
+      "desc": "Figma wireframes and mockups aligned with dev-ready requirements.",
+      "icon": "fig"
+    },
+    {
+      "id": 4,
+      "title": "AI & Data",
+      "desc": "AI product research, SQL queries, BI tools: Qlik, Tableau, Cognos.",
+      "icon": "ai"
+    },
+    {
+      "id": 5,
+      "title": "Stakeholder Management",
+      "desc": "Expectation management, change control, demo presentations.",
+      "icon": "ppl"
+    }
   ],
   "cases": [
     {
@@ -31,7 +68,11 @@
       "company": "Invatechs Software",
       "period": "16 months",
       "domain": "Fintech",
-      "tags": ["Full cycle", "AI integration", "Migration"],
+      "tags": [
+        "Full cycle",
+        "AI integration",
+        "Migration"
+      ],
       "context": "Complete development cycle for a fintech-ecom hybrid system serving multiple markets.",
       "task": "Led estimation, artifact prep, and full delivery support. Managed one-way integration for legacy + new system during migration.",
       "result": "Integrated neural network into press-release search. Delivered stable migration with zero regression on legacy flow."
@@ -42,7 +83,11 @@
       "company": "IT Territory",
       "period": "7 months",
       "domain": "Gaming",
-      "tags": ["Knowledge base", "Microservices", "UX requirements"],
+      "tags": [
+        "Knowledge base",
+        "Microservices",
+        "UX requirements"
+      ],
       "context": "Ongoing product development — knowledge base for future iterations and documenting existing functionality.",
       "task": "Focused on bonus service logic, functional update descriptions, hypothesis testing, and UX/UI requirements.",
       "result": "30+ features documented across microservices. Knowledge base accelerated onboarding of new team members."
@@ -53,7 +98,11 @@
       "company": "Sunmait Technologies",
       "period": "4 months",
       "domain": "AI",
-      "tags": ["Market analysis", "Evaluation framework", "4 domains"],
+      "tags": [
+        "Market analysis",
+        "Evaluation framework",
+        "4 domains"
+      ],
       "context": "Client needed to identify best-fit AI solutions across video conferencing, sales, QA testing, and fraud detection.",
       "task": "Built a flexible AI product scoring system. Deep-dived into each domain to benchmark solutions.",
       "result": "Delivered clear vendor recommendations with scoring rationale. Framework reused for subsequent AI adoption decisions."
@@ -64,19 +113,71 @@
       "company": "Invatechs Software",
       "period": "6 months",
       "domain": "Fintech",
-      "tags": ["Amazon Textract", "Identity verification", "Cross-platform"],
+      "tags": [
+        "Amazon Textract",
+        "Identity verification",
+        "Cross-platform"
+      ],
       "context": "Cross-platform app for students to apply for educational grants.",
       "task": "Designed full grant request cycle — identity confirmation, document verification, back-office storage. Integrated Amazon Textract.",
       "result": "End-to-end automated grant flow from application to approval."
     }
   ],
   "experience": [
-    { "id": 1, "company": "IT Territory", "role": "Business Analyst", "period": "05.2025 – 11.2025", "current": true },
-    { "id": 2, "company": "Sunmait Technologies", "role": "BA / System Analyst", "period": "02.2025 – 05.2025" },
-    { "id": 3, "company": "Aston LLC", "role": "BA / System Analyst", "period": "08.2024 – 02.2025" },
-    { "id": 4, "company": "Invatechs Software", "role": "BA / Project Manager", "period": "02.2023 – 07.2024" },
-    { "id": 5, "company": "Fresh Lime Soft", "role": "Business Analyst", "period": "12.2020 – 01.2023" }
+    {
+      "id": 1,
+      "company": "IT Territory",
+      "role": "Business Analyst",
+      "period": "05.2025 – 11.2025",
+      "current": true
+    },
+    {
+      "id": 2,
+      "company": "Sunmait Technologies",
+      "role": "BA / System Analyst",
+      "period": "02.2025 – 05.2025"
+    },
+    {
+      "id": 3,
+      "company": "Aston LLC",
+      "role": "BA / System Analyst",
+      "period": "08.2024 – 02.2025"
+    },
+    {
+      "id": 4,
+      "company": "Invatechs Software",
+      "role": "BA / Project Manager",
+      "period": "02.2023 – 07.2024"
+    },
+    {
+      "id": 5,
+      "company": "Fresh Lime Soft",
+      "role": "Business Analyst",
+      "period": "12.2020 – 01.2023"
+    }
   ],
-  "stack": ["Jira", "Confluence", "Figma", "SQL", "Miro", "BPMN", "UML", "C4", "Qlik Sense", "Tableau", "SAP", "Cognos BI", "Draw.io", "Amazon Textract"],
-  "domains": ["Fintech", "E-commerce", "Retail", "Banking", "Gaming", "AI"]
+  "stack": [
+    "Jira",
+    "Confluence",
+    "Figma",
+    "SQL",
+    "Miro",
+    "BPMN",
+    "UML",
+    "C4",
+    "Qlik Sense",
+    "Tableau",
+    "SAP",
+    "Cognos BI",
+    "Draw.io",
+    "Amazon Textract"
+  ],
+  "domains": [
+    "Fintech",
+    "E-commerce",
+    "Retail",
+    "Banking",
+    "Gaming",
+    "AI"
+  ]
 }
