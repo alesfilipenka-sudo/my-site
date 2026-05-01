@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useId } from "react";
+import AdminSkeleton from "../components/AdminSkeleton";
+import { useAuth, logout } from "../lib/auth";
 
 /* ───────────────────────────  TOKENS  ─────────────────────────── */
 const C = {
@@ -43,6 +45,7 @@ export default function Admin() {
   const [saveError, setSaveError] = useState("");
   const [activeSection, setActiveSection] = useState("hero");
   const mainRef = useRef(null);
+  const { user } = useAuth();
 
   /* ── load ── */
   useEffect(() => {
@@ -101,48 +104,32 @@ export default function Admin() {
     setActiveSection(id);
   };
 
-  /* ── save to GitHub ── */
+  /* ── save через защищённый Netlify Function ── */
   const saveToGitHub = async () => {
     setSaveStatus("saving");
     setSaveError("");
-    const token = import.meta.env.VITE_GITHUB_TOKEN;
-    const owner = "alesfilipenka-sudo";
-    const repo = "my-site";
-    const path = "public/content.json";
-
-    if (!token) {
-      setSaveStatus("error");
-      setSaveError("VITE_GITHUB_TOKEN не задан");
-      setTimeout(() => setSaveStatus("idle"), 5000);
-      return;
-    }
-
     try {
-      const getRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=main&t=${Date.now()}`, {
-        headers: { Authorization: `Bearer ${token}` },
+      const res = await fetch("/.netlify/functions/save-content", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: data }),
       });
-      if (!getRes.ok) throw new Error(`GET ${getRes.status}`);
-      const fileData = await getRes.json();
-      const json = JSON.stringify(data, null, 2);
-      const contentBase64 = btoa(unescape(encodeURIComponent(json)));
-
-      const putRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}`, {
-        method: "PUT",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: "admin: content update " + new Date().toISOString(),
-          content: contentBase64,
-          sha: fileData.sha,
-        }),
-      });
-      if (!putRes.ok) throw new Error(`PUT ${putRes.status}`);
-
+      if (res.status === 401) {
+        // сессия истекла — отправляем на логин
+        window.location.assign("/login?returnTo=/admin");
+        return;
+      }
+      if (!res.ok) {
+        const errText = await res.text().catch(() => "");
+        throw new Error(errText || `HTTP ${res.status}`);
+      }
       setOriginal(JSON.parse(JSON.stringify(data)));
       setSaveStatus("success");
       setTimeout(() => setSaveStatus("idle"), 3500);
     } catch (e) {
       setSaveStatus("error");
-      setSaveError(e.message || "GitHub API error");
+      setSaveError(e.message || "Save failed");
       setTimeout(() => setSaveStatus("idle"), 6000);
     }
   };
@@ -153,7 +140,7 @@ export default function Admin() {
     setData(JSON.parse(JSON.stringify(original)));
   };
 
-  if (loading) return <CenterMessage>Loading…</CenterMessage>;
+  if (loading) return <AdminSkeleton />;
   if (error)   return <CenterMessage tone="danger">{error}</CenterMessage>;
 
   /* ── update helpers ── */
@@ -182,6 +169,8 @@ export default function Admin() {
           saveError={saveError}
           onSave={saveToGitHub}
           onReset={reset}
+          user={user}
+          onLogout={logout}
         />
 
         <main ref={mainRef} style={{ flex: 1, overflowY: "auto", padding: "32px 40px 120px" }}>
@@ -453,7 +442,7 @@ function Sidebar({ active, onSelect }) {
 }
 
 /* ───────────────────────────  TOPBAR  ─────────────────────────── */
-function Topbar({ isDirty, saveStatus, saveError, onSave, onReset }) {
+function Topbar({ isDirty, saveStatus, saveError, onSave, onReset, user, onLogout }) {
   const saving = saveStatus === "saving";
 
   return (
@@ -476,6 +465,7 @@ function Topbar({ isDirty, saveStatus, saveError, onSave, onReset }) {
         <a href="/" target="_blank" rel="noreferrer" className="btn-ghost" style={{ ...btnGhostStyle, textDecoration: "none" }}>
           View site ↗
         </a>
+        {user && <UserMenu user={user} onLogout={onLogout} />}
         <button
           onClick={onSave}
           disabled={saving || !isDirty}
@@ -519,6 +509,72 @@ function Badge({ children, color, muted, title }) {
       <span style={{ width: 6, height: 6, borderRadius: "50%", background: color }} />
       {children}
     </span>
+  );
+}
+
+function UserMenu({ user, onLogout }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const onDoc = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
+
+  const initial = (user.name || user.login || "?").trim()[0]?.toUpperCase() || "?";
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button
+        onClick={() => setOpen(v => !v)}
+        title={`Signed in as ${user.login}`}
+        className="btn-ghost"
+        style={{ ...btnGhostStyle, padding: "0 8px 0 4px", display: "inline-flex", alignItems: "center", gap: 8 }}
+      >
+        {user.avatar
+          ? <img src={user.avatar} alt="" width={26} height={26} style={{ borderRadius: "50%", display: "block" }} />
+          : <span style={{
+              width: 26, height: 26, borderRadius: "50%",
+              background: C.acc, color: "#fff",
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+              fontSize: 12, fontWeight: 600,
+            }}>{initial}</span>}
+        <span style={{ fontSize: 12, color: C.txMu, fontWeight: 500 }}>@{user.login}</span>
+        <span style={{ fontSize: 10, color: C.txDim }}>▾</span>
+      </button>
+
+      {open && (
+        <div style={{
+          position: "absolute", right: 0, top: "calc(100% + 6px)",
+          background: C.card, border: `1px solid ${C.bd}`, borderRadius: 10,
+          boxShadow: "0 12px 32px rgba(0,0,0,0.12)",
+          minWidth: 200, zIndex: 50, overflow: "hidden",
+        }}>
+          <div style={{ padding: "12px 14px", borderBottom: `1px solid ${C.bd}` }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: C.tx }}>{user.name || user.login}</div>
+            <div style={{ fontSize: 11, color: C.txMu, marginTop: 2 }}>@{user.login} · {user.role}</div>
+          </div>
+          <button
+            onClick={onLogout}
+            style={{
+              width: "100%", textAlign: "left", padding: "10px 14px",
+              background: "transparent", border: "none", cursor: "pointer",
+              fontSize: 13, color: C.danger, display: "flex", alignItems: "center", gap: 8,
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = C.dangerBg}
+            onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/>
+            </svg>
+            Sign out
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 

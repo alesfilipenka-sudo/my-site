@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import SiteSkeleton from "../components/SiteSkeleton";
 
 const iconPath = (t) => ({
   doc: "M6 2h8l4 4v14a2 2 0 01-2 2H6a2 2 0 01-2-2V4a2 2 0 012-2zm0 0v4h4M8 13h8M8 17h5",
@@ -186,7 +187,7 @@ export default function Site() {
     setMobileOpen(false);
   };
 
-  if (!data) return <div style={{ padding: 40, fontFamily: "sans-serif" }}>Loading...</div>;
+  if (!data) return <SiteSkeleton />;
 
   const d = dark;
   const bg      = d ? "#0f0f0f" : "#ffffff";
