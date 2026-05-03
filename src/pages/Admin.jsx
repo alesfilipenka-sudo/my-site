@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useId } from "react";
+import { supabase } from "../lib/supabase";
 import AdminSkeleton from "../components/AdminSkeleton";
 import { useAuth, logout } from "../lib/auth";
 
@@ -35,6 +36,8 @@ const SECTIONS = [
   { id: "domains",    label: "Domains",    num: "08" },
 ];
 
+const nextId = (list = []) => (list.length ? Math.max(...list.map(x => x.id || 0)) + 1 : 1);
+
 /* ───────────────────────────  ROOT  ─────────────────────────── */
 export default function Admin() {
   const [data, setData] = useState(null);
@@ -47,19 +50,49 @@ export default function Admin() {
   const mainRef = useRef(null);
   const { user } = useAuth();
 
-  /* ── load ── */
+  /* ── load из Supabase ── */
+  const reloadFromSupabase = async () => {
+    const [contentRes, casesRes, expRes] = await Promise.all([
+      supabase.from("site_content").select("*"),
+      supabase.from("cases").select("*").order("id", { ascending: true }),
+      supabase.from("experience").select("*").order("id", { ascending: true }),
+    ]);
+    if (contentRes.error) throw contentRes.error;
+    if (casesRes.error)   throw casesRes.error;
+    if (expRes.error)     throw expRes.error;
+
+    const byKey = Object.fromEntries(
+      (contentRes.data || []).map(row => [row.key, row.data])
+    );
+
+    return {
+      hero:       byKey.hero       ?? {},
+      about:      byKey.about      ?? "",
+      stack:      byKey.stack      ?? [],
+      domains:    byKey.domains    ?? [],
+      stats:      byKey.stats      ?? [],
+      expertise:  byKey.expertise  ?? [],
+      cases:      casesRes.data    ?? [],
+      experience: expRes.data      ?? [],
+    };
+  };
+
   useEffect(() => {
-    fetch(`/content.json?t=${Date.now()}`)
-      .then(r => r.json())
-      .then(json => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const json = await reloadFromSupabase();
+        if (cancelled) return;
         setData(json);
         setOriginal(JSON.parse(JSON.stringify(json)));
         setLoading(false);
-      })
-      .catch(() => {
-        setError("Не удалось загрузить content.json");
+      } catch (e) {
+        if (cancelled) return;
+        setError(e.message || "Не удалось загрузить данные из Supabase");
         setLoading(false);
-      });
+      }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   /* ── dirty tracking + beforeunload guard ── */
@@ -78,7 +111,7 @@ export default function Admin() {
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [isDirty]);
 
-  /* ── scroll spy для подсветки секции в сайдбаре ── */
+  /* ── scroll spy ── */
   useEffect(() => {
     if (!mainRef.current) return;
     const obs = new IntersectionObserver(
@@ -104,32 +137,72 @@ export default function Admin() {
     setActiveSection(id);
   };
 
-  /* ── save через защищённый Netlify Function ── */
-  const saveToGitHub = async () => {
+  /* ── save в Supabase: site_content (upsert), cases/experience (split insert+upsert) ── */
+  const saveToSupabase = async () => {
     setSaveStatus("saving");
     setSaveError("");
     try {
-      const res = await fetch("/.netlify/functions/save-content", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: data }),
-      });
-      if (res.status === 401) {
-        // сессия истекла — отправляем на логин
-        window.location.assign("/login?returnTo=/admin");
-        return;
+      // 1. site_content — скалярные и object/array секции одним батчем
+      const contentRows = [
+        { key: "hero",      data: data.hero      ?? {} },
+        { key: "about",     data: data.about     ?? "" },
+        { key: "stack",     data: data.stack     ?? [] },
+        { key: "domains",   data: data.domains   ?? [] },
+        { key: "stats",     data: data.stats     ?? [] },
+        { key: "expertise", data: data.expertise ?? [] },
+      ];
+      const contentRes = await supabase
+        .from("site_content")
+        .upsert(contentRows, { onConflict: "key" });
+      if (contentRes.error) throw contentRes.error;
+
+      // helper: разделить массив на новые (без id) и существующие
+      const split = (rows) => {
+        const fresh = [], existing = [];
+        for (const row of rows || []) {
+          if (row.id == null) {
+            // strip id key entirely — пусть БД сгенерит auto-increment
+            const { id: _ignore, ...rest } = row;
+            fresh.push(rest);
+          } else {
+            existing.push(row);
+          }
+        }
+        return { fresh, existing };
+      };
+
+      // 2. cases
+      const c = split(data.cases);
+      if (c.existing.length) {
+        const r = await supabase.from("cases").upsert(c.existing, { onConflict: "id" });
+        if (r.error) throw r.error;
       }
-      if (!res.ok) {
-        const errText = await res.text().catch(() => "");
-        throw new Error(errText || `HTTP ${res.status}`);
+      if (c.fresh.length) {
+        const r = await supabase.from("cases").insert(c.fresh);
+        if (r.error) throw r.error;
       }
-      setOriginal(JSON.parse(JSON.stringify(data)));
+
+      // 3. experience
+      const e = split(data.experience);
+      if (e.existing.length) {
+        const r = await supabase.from("experience").upsert(e.existing, { onConflict: "id" });
+        if (r.error) throw r.error;
+      }
+      if (e.fresh.length) {
+        const r = await supabase.from("experience").insert(e.fresh);
+        if (r.error) throw r.error;
+      }
+
+      // 4. перезагрузить из БД, чтобы поймать настоящие id у новых записей
+      const fresh = await reloadFromSupabase();
+
+      setData(fresh);
+      setOriginal(JSON.parse(JSON.stringify(fresh)));
       setSaveStatus("success");
       setTimeout(() => setSaveStatus("idle"), 3500);
-    } catch (e) {
+    } catch (err) {
       setSaveStatus("error");
-      setSaveError(e.message || "Save failed");
+      setSaveError(err.message || "Save failed");
       setTimeout(() => setSaveStatus("idle"), 6000);
     }
   };
@@ -167,7 +240,7 @@ export default function Admin() {
           isDirty={isDirty}
           saveStatus={saveStatus}
           saveError={saveError}
-          onSave={saveToGitHub}
+          onSave={saveToSupabase}
           onReset={reset}
           user={user}
           onLogout={logout}
@@ -222,9 +295,7 @@ export default function Admin() {
             <Section
               id="stats" num="03" title="Metrics"
               subtitle="Цифры в Hero (4 штуки оптимально)"
-              action={
-                <BtnGhost onClick={() => addToList("stats", { value: "0", label: "new metric" })}>+ Add metric</BtnGhost>
-              }
+              action={<BtnGhost onClick={() => addToList("stats", { value: "0", label: "new metric" })}>+ Add metric</BtnGhost>}
             >
               {data.stats?.map((s, i) => (
                 <Card key={i}>
@@ -247,11 +318,7 @@ export default function Admin() {
             <Section
               id="expertise" num="04" title="Expertise"
               subtitle="Карточки 'What I do'. Иконки: doc, sys, fig, ai, ppl"
-              action={
-                <BtnGhost onClick={() => addToList("expertise", {
-                  id: nextId(data.expertise), title: "New expertise", desc: "", icon: "doc",
-                })}>+ Add expertise</BtnGhost>
-              }
+              action={<BtnGhost onClick={() => addToList("expertise", { id: nextId(data.expertise), title: "New expertise", desc: "", icon: "doc" })}>+ Add expertise</BtnGhost>}
             >
               {data.expertise?.map((e, i) => (
                 <Card key={e.id ?? i}>
@@ -281,12 +348,7 @@ export default function Admin() {
             <Section
               id="cases" num="05" title="Cases"
               subtitle="Selected work. Аккордеон Context / Task / Result"
-              action={
-                <BtnGhost onClick={() => addToList("cases", {
-                  id: nextId(data.cases), title: "New case", company: "", period: "",
-                  domain: "", tags: [], context: "", task: "", result: "",
-                })}>+ Add case</BtnGhost>
-              }
+              action={<BtnGhost onClick={() => addToList("cases", { title: "Untitled case", company: "", period: "", domain: "", tags: [], context: "", task: "", result: "", hidden: false })}>+ Add case</BtnGhost>}
             >
               {data.cases?.map((c, i) => (
                 <Card key={c.id ?? i} accent>
@@ -320,11 +382,7 @@ export default function Admin() {
             <Section
               id="experience" num="06" title="Experience"
               subtitle="Career timeline. Зелёная точка = current"
-              action={
-                <BtnGhost onClick={() => addToList("experience", {
-                  id: nextId(data.experience), company: "", role: "", period: "", current: false,
-                })}>+ Add row</BtnGhost>
-              }
+              action={<BtnGhost onClick={() => addToList("experience", { company: "New company", role: "", period: "", current: false })}>+ Add row</BtnGhost>}
             >
               {data.experience?.map((e, i) => (
                 <Card key={e.id ?? i}>
@@ -384,9 +442,6 @@ export default function Admin() {
   );
 }
 
-/* ───────────────────────────  HELPERS  ─────────────────────────── */
-const nextId = (list = []) => (list.length ? Math.max(...list.map(x => x.id || 0)) + 1 : 1);
-
 /* ───────────────────────────  SIDEBAR  ─────────────────────────── */
 function Sidebar({ active, onSelect }) {
   return (
@@ -422,20 +477,17 @@ function Sidebar({ active, onSelect }) {
             >
               <span style={{
                 fontSize: 10, fontFamily: "ui-monospace, monospace",
-                color: isActive ? C.acc : C.sideTx, opacity: isActive ? 1 : 0.6,
-                width: 22,
+                color: isActive ? C.acc : C.sideTx, opacity: isActive ? 1 : 0.6, width: 22,
               }}>{s.num}</span>
               <span>{s.label}</span>
-              {isActive && (
-                <span style={{ marginLeft: "auto", width: 4, height: 16, background: C.acc, borderRadius: 2 }} />
-              )}
+              {isActive && <span style={{ marginLeft: "auto", width: 4, height: 16, background: C.acc, borderRadius: 2 }} />}
             </button>
           );
         })}
       </nav>
 
       <div style={{ padding: "14px 18px", borderTop: `1px solid ${C.sideBd}`, fontSize: 11, color: C.sideTx, lineHeight: 1.5 }}>
-        Сохранение коммитит<br/>в <code style={{ color: C.acc }}>main</code> · Netlify деплоит ~30 сек
+        Сохранение через<br/><code style={{ color: C.acc }}>Supabase</code> · моментально
       </div>
     </aside>
   );
@@ -458,9 +510,7 @@ function Topbar({ isDirty, saveStatus, saveError, onSave, onReset, user, onLogou
 
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         {isDirty && (
-          <button onClick={onReset} className="btn-ghost" style={btnGhostStyle}>
-            Reset
-          </button>
+          <button onClick={onReset} className="btn-ghost" style={btnGhostStyle}>Reset</button>
         )}
         <a href="/" target="_blank" rel="noreferrer" className="btn-ghost" style={{ ...btnGhostStyle, textDecoration: "none" }}>
           View site ↗
@@ -477,10 +527,10 @@ function Topbar({ isDirty, saveStatus, saveError, onSave, onReset, user, onLogou
             cursor: !isDirty || saving ? "not-allowed" : "pointer",
           }}
         >
-          {saving       ? "Publishing…" :
-           saveStatus === "success" ? "✓ Published" :
-           saveStatus === "error"   ? "Retry" :
-           "Publish to GitHub"}
+          {saving                    ? "Publishing…" :
+           saveStatus === "success"  ? "✓ Published" :
+           saveStatus === "error"    ? "Retry" :
+                                       "Publish"}
         </button>
       </div>
     </header>
@@ -488,12 +538,9 @@ function Topbar({ isDirty, saveStatus, saveError, onSave, onReset, user, onLogou
 }
 
 function DirtyBadge({ isDirty, saveStatus, saveError }) {
-  if (saveStatus === "success")
-    return <Badge color={C.ok}>Deployed</Badge>;
-  if (saveStatus === "error")
-    return <Badge color={C.danger} title={saveError}>Error{saveError ? ": " + saveError : ""}</Badge>;
-  if (isDirty)
-    return <Badge color={C.warn}>Unsaved changes</Badge>;
+  if (saveStatus === "success") return <Badge color={C.ok}>Saved</Badge>;
+  if (saveStatus === "error")   return <Badge color={C.danger} title={saveError}>Error{saveError ? ": " + saveError : ""}</Badge>;
+  if (isDirty)                  return <Badge color={C.warn}>Unsaved changes</Badge>;
   return <Badge color={C.txDim} muted>Synced</Badge>;
 }
 
@@ -537,8 +584,7 @@ function UserMenu({ user, onLogout }) {
         {user.avatar
           ? <img src={user.avatar} alt="" width={26} height={26} style={{ borderRadius: "50%", display: "block" }} />
           : <span style={{
-              width: 26, height: 26, borderRadius: "50%",
-              background: C.acc, color: "#fff",
+              width: 26, height: 26, borderRadius: "50%", background: C.acc, color: "#fff",
               display: "inline-flex", alignItems: "center", justifyContent: "center",
               fontSize: 12, fontWeight: 600,
             }}>{initial}</span>}
@@ -550,8 +596,7 @@ function UserMenu({ user, onLogout }) {
         <div style={{
           position: "absolute", right: 0, top: "calc(100% + 6px)",
           background: C.card, border: `1px solid ${C.bd}`, borderRadius: 10,
-          boxShadow: "0 12px 32px rgba(0,0,0,0.12)",
-          minWidth: 200, zIndex: 50, overflow: "hidden",
+          boxShadow: "0 12px 32px rgba(0,0,0,0.12)", minWidth: 200, zIndex: 50, overflow: "hidden",
         }}>
           <div style={{ padding: "12px 14px", borderBottom: `1px solid ${C.bd}` }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: C.tx }}>{user.name || user.login}</div>
@@ -584,19 +629,13 @@ function Section({ id, num, title, subtitle, action, children }) {
     <section id={id} style={{ scrollMarginTop: 24, marginBottom: 56 }}>
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, marginBottom: 16 }}>
         <div>
-          <div style={{ fontSize: 11, fontFamily: "ui-monospace, monospace", color: C.acc, letterSpacing: "0.1em", marginBottom: 4 }}>
-            {num}
-          </div>
+          <div style={{ fontSize: 11, fontFamily: "ui-monospace, monospace", color: C.acc, letterSpacing: "0.1em", marginBottom: 4 }}>{num}</div>
           <h2 style={{ fontSize: 22, fontWeight: 600, margin: 0, color: C.tx, letterSpacing: "-0.01em" }}>{title}</h2>
-          {subtitle && (
-            <p style={{ fontSize: 13, color: C.txMu, margin: "4px 0 0", lineHeight: 1.5 }}>{subtitle}</p>
-          )}
+          {subtitle && <p style={{ fontSize: 13, color: C.txMu, margin: "4px 0 0", lineHeight: 1.5 }}>{subtitle}</p>}
         </div>
         {action && <div>{action}</div>}
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        {children}
-      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>{children}</div>
     </section>
   );
 }
@@ -607,9 +646,7 @@ function Card({ children, accent }) {
       background: C.card, border: `1px solid ${C.bd}`, borderRadius: 10,
       padding: 20, borderLeft: accent ? `3px solid ${C.acc}` : `1px solid ${C.bd}`,
       display: "flex", flexDirection: "column", gap: 14,
-    }}>
-      {children}
-    </div>
+    }}>{children}</div>
   );
 }
 
@@ -630,20 +667,10 @@ function ItemHeader({ title, subtitle, hidden, onToggleHidden, onRemove }) {
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-        <button
-          onClick={onToggleHidden}
-          title={hidden ? "Показать на сайте" : "Скрыть на сайте"}
-          className="icon-btn"
-          style={iconBtnStyle}
-        >
+        <button onClick={onToggleHidden} title={hidden ? "Показать" : "Скрыть"} className="icon-btn" style={iconBtnStyle}>
           {hidden ? <EyeOff /> : <Eye />}
         </button>
-        <button
-          onClick={onRemove}
-          title="Удалить"
-          className="icon-btn icon-btn--danger"
-          style={iconBtnStyle}
-        >
+        <button onClick={onRemove} title="Удалить" className="icon-btn icon-btn--danger" style={iconBtnStyle}>
           <Trash />
         </button>
       </div>
@@ -653,7 +680,8 @@ function ItemHeader({ title, subtitle, hidden, onToggleHidden, onRemove }) {
 
 /* ───────────────────────────  FIELDS  ─────────────────────────── */
 function Row({ children }) {
-  return <div style={{ display: "grid", gridTemplateColumns: `repeat(${children.length}, 1fr)`, gap: 12 }}>{children}</div>;
+  const arr = Array.isArray(children) ? children : [children];
+  return <div style={{ display: "grid", gridTemplateColumns: `repeat(${arr.length}, 1fr)`, gap: 12 }}>{children}</div>;
 }
 
 function Field({ label, value, onChange, type = "text", options, rows = 3 }) {
@@ -662,33 +690,14 @@ function Field({ label, value, onChange, type = "text", options, rows = 3 }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
       <label htmlFor={id} style={labelStyle}>{label}</label>
       {type === "textarea" ? (
-        <textarea
-          id={id}
-          className="input"
-          value={value ?? ""}
-          onChange={e => onChange(e.target.value)}
-          rows={rows}
-          style={{ ...inputBaseStyle, resize: "vertical", minHeight: 72 }}
-        />
+        <textarea id={id} className="input" value={value ?? ""} onChange={e => onChange(e.target.value)} rows={rows}
+          style={{ ...inputBaseStyle, resize: "vertical", minHeight: 72 }} />
       ) : type === "select" ? (
-        <select
-          id={id}
-          className="input"
-          value={value ?? ""}
-          onChange={e => onChange(e.target.value)}
-          style={inputBaseStyle}
-        >
+        <select id={id} className="input" value={value ?? ""} onChange={e => onChange(e.target.value)} style={inputBaseStyle}>
           {(options || []).map(o => <option key={o} value={o}>{o}</option>)}
         </select>
       ) : (
-        <input
-          id={id}
-          className="input"
-          type="text"
-          value={value ?? ""}
-          onChange={e => onChange(e.target.value)}
-          style={inputBaseStyle}
-        />
+        <input id={id} className="input" type="text" value={value ?? ""} onChange={e => onChange(e.target.value)} style={inputBaseStyle} />
       )}
     </div>
   );
@@ -744,10 +753,7 @@ function TagEditor({ label, tags, onChange, placeholder, accent }) {
             {t}
             <button
               onClick={() => onChange(tags.filter((_, idx) => idx !== i))}
-              style={{
-                background: "transparent", border: "none", cursor: "pointer",
-                color: "inherit", opacity: 0.55, fontSize: 14, lineHeight: 1, padding: 0,
-              }}
+              style={{ background: "transparent", border: "none", cursor: "pointer", color: "inherit", opacity: 0.55, fontSize: 14, lineHeight: 1, padding: 0 }}
               title="Remove"
             >×</button>
           </span>
@@ -776,8 +782,7 @@ const Trash  = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
 
 /* ───────────────────────────  STYLES  ─────────────────────────── */
 const labelStyle = {
-  fontSize: 11, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase",
-  color: C.txMu,
+  fontSize: 11, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", color: C.txMu,
 };
 
 const inputBaseStyle = {
@@ -820,12 +825,11 @@ function CenterMessage({ children, tone }) {
     <div style={{
       minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
       background: C.bg, color: tone === "danger" ? C.danger : C.tx,
-      fontFamily: "Inter, system-ui, sans-serif", fontSize: 14,
+      fontFamily: "Inter, system-ui, sans-serif", fontSize: 14, padding: 24, textAlign: "center",
     }}>{children}</div>
   );
 }
 
-/* ───────────────────────────  GLOBAL CSS  ─────────────────────────── */
 function GlobalStyles() {
   return (
     <style>{`
@@ -833,34 +837,18 @@ function GlobalStyles() {
         border-color: ${C.acc} !important;
         box-shadow: 0 0 0 3px ${C.acc}26 !important;
       }
-      .btn-primary:hover:not(:disabled) {
-        background: ${C.accD} !important;
-      }
-      .btn-ghost:hover {
-        background: ${C.bg};
-        border-color: ${C.bdH};
-      }
-      .icon-btn:hover {
-        background: ${C.bg};
-        color: ${C.tx};
-        border-color: ${C.bdH};
-      }
-      .icon-btn--danger:hover {
-        background: ${C.dangerBg};
-        color: ${C.danger};
-        border-color: #fecaca;
-      }
-      .side-link:hover {
-        background: rgba(255,255,255,0.04);
-        color: ${C.sideTxA};
-      }
+      .btn-primary:hover:not(:disabled) { background: ${C.accD} !important; }
+      .btn-ghost:hover                  { background: ${C.bg}; border-color: ${C.bdH}; }
+      .icon-btn:hover                   { background: ${C.bg}; color: ${C.tx}; border-color: ${C.bdH}; }
+      .icon-btn--danger:hover           { background: ${C.dangerBg}; color: ${C.danger}; border-color: #fecaca; }
+      .side-link:hover                  { background: rgba(255,255,255,0.04); color: ${C.sideTxA}; }
       ::selection { background: ${C.acc}40; }
       input, textarea, select { font-family: inherit; }
       * { box-sizing: border-box; }
-      ::-webkit-scrollbar { width: 10px; height: 10px; }
-      ::-webkit-scrollbar-thumb { background: ${C.bdH}; border-radius: 999px; border: 2px solid ${C.bg}; }
-      ::-webkit-scrollbar-thumb:hover { background: ${C.txDim}; }
-      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar              { width: 10px; height: 10px; }
+      ::-webkit-scrollbar-thumb        { background: ${C.bdH}; border-radius: 999px; border: 2px solid ${C.bg}; }
+      ::-webkit-scrollbar-thumb:hover  { background: ${C.txDim}; }
+      ::-webkit-scrollbar-track        { background: transparent; }
     `}</style>
   );
 }

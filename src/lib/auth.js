@@ -1,40 +1,84 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
+import { supabase } from "./supabase";
 
-const ME_URL     = "/.netlify/functions/auth-me";
-const LOGIN_URL  = "/.netlify/functions/auth-login";
-const LOGOUT_URL = "/.netlify/functions/auth-logout";
+/**
+ * Нормализует Supabase user в форму, которую ждёт UI:
+ *   { login, email, name, avatar, role }
+ *
+ * Allowlist:
+ *   VITE_ADMIN_EMAILS — comma-separated emails (от Supabase)
+ *   VITE_ADMIN_USERS  — comma-separated GitHub usernames (из user_metadata.user_name)
+ *
+ * Если ни email, ни username не в списке — role = "user", и ProtectedRoute не пустит на /admin.
+ */
+function normalizeUser(supaUser) {
+  if (!supaUser) return null;
+  const meta  = supaUser.user_metadata || {};
+  const email = (supaUser.email || "").toLowerCase();
+  const login = (meta.user_name || meta.preferred_username || email.split("@")[0] || "").toLowerCase();
 
-/** Хук получения текущего пользователя из cookie-сессии. */
+  const parseList = (v) => (v || "")
+    .toLowerCase()
+    .split(",")
+    .map(s => s.trim())
+    .filter(Boolean);
+
+  const adminEmails = parseList(import.meta.env.VITE_ADMIN_EMAILS);
+  const adminLogins = parseList(import.meta.env.VITE_ADMIN_USERS);
+
+  // если allow-list вообще не настроен — никого не пускаем (безопасный дефолт)
+  const hasList = adminEmails.length || adminLogins.length;
+  const isAdmin = hasList && (adminEmails.includes(email) || adminLogins.includes(login));
+
+  return {
+    login,
+    email,
+    name: meta.full_name || meta.name || login,
+    avatar: meta.avatar_url || null,
+    role: isAdmin ? "admin" : "user",
+  };
+}
+
+/** React-хук с текущей Supabase-сессией. Подписан на onAuthStateChange. */
 export function useAuth() {
   const [state, setState] = useState({ loading: true, user: null });
 
-  const refresh = useCallback(async () => {
-    try {
-      const res = await fetch(ME_URL, { credentials: "include", cache: "no-store" });
-      if (!res.ok) {
-        setState({ loading: false, user: null });
-        return;
-      }
-      const data = await res.json();
-      setState({ loading: false, user: data.user || null });
-    } catch {
-      setState({ loading: false, user: null });
-    }
+  useEffect(() => {
+    let mounted = true;
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return;
+      setState({ loading: false, user: normalizeUser(data?.session?.user) });
+    });
+
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!mounted) return;
+      setState({ loading: false, user: normalizeUser(session?.user) });
+    });
+
+    return () => {
+      mounted = false;
+      sub?.subscription?.unsubscribe?.();
+    };
   }, []);
 
-  // refresh() читает cookie через сеть; setState внутри происходит ПОСЛЕ await — не sync.
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { refresh(); }, [refresh]);
-
-  return { ...state, refresh };
+  return state;
 }
 
-export function login(returnTo = "/admin") {
-  const url = `${LOGIN_URL}?returnTo=${encodeURIComponent(returnTo)}`;
-  window.location.assign(url);
+/** Старт OAuth: редирект на GitHub, после возврата Supabase сам подцепит сессию. */
+export async function login(returnTo = "/admin") {
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: "github",
+    options: { redirectTo: window.location.origin + returnTo },
+  });
+  if (error) {
+    console.error("login error:", error);
+    alert("Login failed: " + error.message);
+  }
 }
 
+/** Logout + редирект на главную. */
 export async function logout() {
-  await fetch(LOGOUT_URL, { method: "POST", credentials: "include" });
+  await supabase.auth.signOut();
   window.location.assign("/");
 }
