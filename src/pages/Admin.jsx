@@ -27,13 +27,14 @@ const C = {
 
 const SECTIONS = [
   { id: "hero",       label: "Hero",       num: "01" },
-  { id: "about",      label: "About",      num: "02" },
-  { id: "stats",      label: "Metrics",    num: "03" },
-  { id: "expertise",  label: "Expertise",  num: "04" },
-  { id: "cases",      label: "Cases",      num: "05" },
-  { id: "experience", label: "Experience", num: "06" },
-  { id: "stack",      label: "Stack",      num: "07" },
-  { id: "domains",    label: "Domains",    num: "08" },
+  { id: "projects",   label: "Projects",   num: "02" },
+  { id: "about",      label: "About",      num: "03" },
+  { id: "stats",      label: "Metrics",    num: "04" },
+  { id: "expertise",  label: "Expertise",  num: "05" },
+  { id: "cases",      label: "Cases",      num: "06" },
+  { id: "experience", label: "Experience", num: "07" },
+  { id: "stack",      label: "Stack",      num: "08" },
+  { id: "domains",    label: "Domains",    num: "09" },
 ];
 
 const nextId = (list = []) => (list.length ? Math.max(...list.map(x => x.id || 0)) + 1 : 1);
@@ -52,14 +53,16 @@ export default function Admin() {
 
   /* ── load из Supabase ── */
   const reloadFromSupabase = async () => {
-    const [contentRes, casesRes, expRes] = await Promise.all([
+    const [contentRes, casesRes, expRes, projectsRes] = await Promise.all([
       supabase.from("site_content").select("*"),
       supabase.from("cases").select("*").order("id", { ascending: true }),
       supabase.from("experience").select("*").order("id", { ascending: true }),
+      supabase.from("projects").select("*").order("sort_order", { ascending: true }),
     ]);
-    if (contentRes.error) throw contentRes.error;
-    if (casesRes.error)   throw casesRes.error;
-    if (expRes.error)     throw expRes.error;
+    if (contentRes.error)  throw contentRes.error;
+    if (casesRes.error)    throw casesRes.error;
+    if (expRes.error)      throw expRes.error;
+    if (projectsRes.error) throw projectsRes.error;
 
     const byKey = Object.fromEntries(
       (contentRes.data || []).map(row => [row.key, row.data])
@@ -74,6 +77,7 @@ export default function Admin() {
       expertise:  byKey.expertise  ?? [],
       cases:      casesRes.data    ?? [],
       experience: expRes.data      ?? [],
+      projects:   projectsRes.data ?? [],
     };
   };
 
@@ -193,7 +197,18 @@ export default function Admin() {
         if (r.error) throw r.error;
       }
 
-      // 4. перезагрузить из БД, чтобы поймать настоящие id у новых записей
+      // 4. projects
+      const p = split(data.projects);
+      if (p.existing.length) {
+        const r = await supabase.from("projects").upsert(p.existing, { onConflict: "id" });
+        if (r.error) throw r.error;
+      }
+      if (p.fresh.length) {
+        const r = await supabase.from("projects").insert(p.fresh);
+        if (r.error) throw r.error;
+      }
+
+      // 5. перезагрузить из БД, чтобы поймать настоящие id у новых записей
       const fresh = await reloadFromSupabase();
 
       setData(fresh);
@@ -278,8 +293,59 @@ export default function Admin() {
               </Card>
             </Section>
 
+            {/* PROJECTS */}
+            <Section
+              id="projects" num="02" title="Projects"
+              subtitle="Карточки портфолио. Self-project / Vibecode / клиентский."
+              action={<BtnGhost onClick={() => addToList("projects", {
+                title: "New project", desc: "", company: "Self-project",
+                domain: "", status: "in-dev", date: "", icon: "globe",
+                image: "", placeholder: "",
+                sort_order: (data.projects?.length || 0) * 10 + 10, hidden: false,
+              })}>+ Add project</BtnGhost>}
+            >
+              {data.projects?.map((p, i) => (
+                <Card key={p.id ?? i} accent>
+                  <ItemHeader
+                    title={p.title || "Untitled"}
+                    subtitle={`${p.company || "—"} · ${p.domain || "—"} · ${p.status || "—"}`}
+                    hidden={!!p.hidden}
+                    onToggleHidden={() => setListAt("projects", i, { hidden: !p.hidden })}
+                    onRemove={() => removeFromList("projects", i)}
+                  />
+                  <Field label="Title" value={p.title}
+                         onChange={v => setListAt("projects", i, { title: v })} />
+                  <Field label="Description" type="textarea" rows={3} value={p.desc}
+                         onChange={v => setListAt("projects", i, { desc: v })} />
+                  <Row>
+                    <Field label="Company" value={p.company}
+                           onChange={v => setListAt("projects", i, { company: v })} />
+                    <Field label="Domain"  value={p.domain}
+                           onChange={v => setListAt("projects", i, { domain: v })} />
+                  </Row>
+                  <Row>
+                    <Field label="Status" type="select" options={["in-dev", "ready"]}
+                           value={p.status} onChange={v => setListAt("projects", i, { status: v })} />
+                    <Field label="Date (e.g. 10.2025 or Q1 2026)" value={p.date}
+                           onChange={v => setListAt("projects", i, { date: v })} />
+                    <Field label="Icon" type="select" options={["globe", "kanban", "spark", "chart", "box"]}
+                           value={p.icon} onChange={v => setListAt("projects", i, { icon: v })} />
+                  </Row>
+                  <Row>
+                    <Field label="Image URL" value={p.image}
+                           onChange={v => setListAt("projects", i, { image: v })} />
+                    <Field label="Placeholder caption" value={p.placeholder}
+                           onChange={v => setListAt("projects", i, { placeholder: v })} />
+                  </Row>
+                  <Field label="Sort order (lower = higher on page)"
+                         value={String(p.sort_order ?? "")}
+                         onChange={v => setListAt("projects", i, { sort_order: parseInt(v, 10) || 0 })} />
+                </Card>
+              ))}
+            </Section>
+
             {/* ABOUT */}
-            <Section id="about" num="02" title="About" subtitle="Текст параграфа в секции Professional story">
+            <Section id="about" num="03" title="About" subtitle="Текст параграфа в секции Professional story">
               <Card>
                 <Field
                   label="About"
@@ -293,7 +359,7 @@ export default function Admin() {
 
             {/* STATS */}
             <Section
-              id="stats" num="03" title="Metrics"
+              id="stats" num="04" title="Metrics"
               subtitle="Цифры в Hero (4 штуки оптимально)"
               action={<BtnGhost onClick={() => addToList("stats", { value: "0", label: "new metric" })}>+ Add metric</BtnGhost>}
             >
@@ -316,7 +382,7 @@ export default function Admin() {
 
             {/* EXPERTISE */}
             <Section
-              id="expertise" num="04" title="Expertise"
+              id="expertise" num="05" title="Expertise"
               subtitle="Карточки 'What I do'. Иконки: doc, sys, fig, ai, ppl"
               action={<BtnGhost onClick={() => addToList("expertise", { id: nextId(data.expertise), title: "New expertise", desc: "", icon: "doc" })}>+ Add expertise</BtnGhost>}
             >
@@ -346,7 +412,7 @@ export default function Admin() {
 
             {/* CASES */}
             <Section
-              id="cases" num="05" title="Cases"
+              id="cases" num="06" title="Cases"
               subtitle="Selected work. Аккордеон Context / Task / Result"
               action={<BtnGhost onClick={() => addToList("cases", { title: "Untitled case", company: "", period: "", domain: "", tags: [], context: "", task: "", result: "", hidden: false })}>+ Add case</BtnGhost>}
             >
@@ -380,7 +446,7 @@ export default function Admin() {
 
             {/* EXPERIENCE */}
             <Section
-              id="experience" num="06" title="Experience"
+              id="experience" num="07" title="Experience"
               subtitle="Career timeline. Зелёная точка = current"
               action={<BtnGhost onClick={() => addToList("experience", { company: "New company", role: "", period: "", current: false })}>+ Add row</BtnGhost>}
             >
@@ -409,7 +475,7 @@ export default function Admin() {
             </Section>
 
             {/* STACK */}
-            <Section id="stack" num="07" title="Stack & tools" subtitle="Теги под Experience">
+            <Section id="stack" num="08" title="Stack & tools" subtitle="Теги под Experience">
               <Card>
                 <TagEditor
                   label="Stack"
@@ -421,7 +487,7 @@ export default function Admin() {
             </Section>
 
             {/* DOMAINS */}
-            <Section id="domains" num="08" title="Domains" subtitle="Теги в About → Domains">
+            <Section id="domains" num="09" title="Domains" subtitle="Теги в About → Domains">
               <Card>
                 <TagEditor
                   label="Domains"

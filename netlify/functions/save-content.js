@@ -25,7 +25,7 @@ export default async (req) => {
   if (!content || typeof content !== "object") return text("Missing content payload", 400);
 
   // лёгкая валидация структуры — чтобы случайным запросом не сломать сайт
-  const requiredKeys = ["hero", "stats", "expertise", "cases", "experience", "stack", "domains"];
+  const requiredKeys = ["hero", "stats", "expertise", "cases", "experience", "stack", "domains", "projects"];
   for (const k of requiredKeys) {
     if (!(k in content)) return text(`Invalid content: missing "${k}"`, 400);
   }

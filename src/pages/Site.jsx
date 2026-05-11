@@ -26,7 +26,7 @@ function tokens(dark) {
   };
 }
 
-const NAV_ITEMS = ["About", "Expertise", "Cases", "Experience", "Contact"];
+const NAV_ITEMS = ["Projects", "About", "Expertise", "Cases", "Experience", "Contact"];
 
 const FLOW_STEPS = [
   { k: "01", label: "Discovery",    points: ["Stakeholder interviews", "Business context analysis", "Problem framing", "Scope definition"] },
@@ -41,6 +41,14 @@ const EXP_ICONS = {
   fig: "M5 5.5A3.5 3.5 0 018.5 2H12v7H8.5A3.5 3.5 0 015 5.5zM12 2h3.5a3.5 3.5 0 010 7H12V2zM12 12.5a3.5 3.5 0 117 0 3.5 3.5 0 01-7 0zM5 19.5A3.5 3.5 0 018.5 16H12v3.5a3.5 3.5 0 01-7 0zM5 12.5A3.5 3.5 0 018.5 9H12v7H8.5A3.5 3.5 0 015 12.5z",
   ai:  "M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z",
   ppl: "M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75",
+};
+
+const PROJECT_ICONS = {
+  globe:  "M12 2a10 10 0 100 20 10 10 0 000-20zM2 12h20M12 2a15 15 0 010 20M12 2a15 15 0 000 20",
+  kanban: "M5 4h4v16H5zM10 4h4v10h-4zM15 4h4v6h-4z",
+  spark:  "M12 2l2.5 6.5L21 11l-6.5 2.5L12 20l-2.5-6.5L3 11l6.5-2.5L12 2z",
+  chart:  "M3 3v18h18M7 14l3-3 3 3 5-5",
+  box:    "M21 8L12 3 3 8v8l9 5 9-5V8zM3 8l9 5 9-5M12 13v9",
 };
 
 /* ─── Hooks & primitives ──────────────────────────────────── */
@@ -273,9 +281,11 @@ export default function Site() {
       .ap-nav-mobile-btn { display: inline-flex !important; }
       .ap-main { padding: 0 18px !important; }
       .ap-exp-row { grid-template-columns: 110px 1fr !important; gap: 14px !important; padding-left: 22px !important; }
+      .projects-grid { grid-template-columns: 1fr 1fr !important; gap: 16px !important; }
     }
     @media (max-width: 600px) {
       .ap-process-grid, .ap-expertise-grid { grid-template-columns: 1fr !important; }
+      .projects-grid { grid-template-columns: 1fr !important; }
     }
   `;
 
@@ -511,9 +521,12 @@ export default function Site() {
             </div>
           </section>
 
+          {/* PROJECTS */}
+          <Projects T={T} data={data} />
+
           {/* PROCESS */}
           <section style={{ padding: "80px 0", borderTop: `0.5px solid ${T.border}` }}>
-            <Reveal><Kicker T={T} num="00">Process — how engagements run</Kicker></Reveal>
+            <Reveal><Kicker T={T} num="02">Process — how engagements run</Kicker></Reveal>
             <Reveal delay={100}>
               <div className="ap-process-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)",
                 border: `0.5px solid ${T.border}`, borderRadius: 12, background: T.bg2, overflow: "hidden" }}>
@@ -545,7 +558,7 @@ export default function Site() {
 
           {/* ABOUT */}
           <section id="about" style={{ padding: "100px 0", borderTop: `0.5px solid ${T.border}` }}>
-            <Reveal><Kicker T={T} num="01">About</Kicker></Reveal>
+            <Reveal><Kicker T={T} num="03">About</Kicker></Reveal>
             <div className="ap-about-grid" style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 64, alignItems: "start" }}>
               <div>
                 <Reveal delay={80}>
@@ -582,7 +595,7 @@ export default function Site() {
           <section id="expertise" style={{ padding: "100px 0", borderTop: `0.5px solid ${T.border}` }}>
             <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 40, gap: 24, flexWrap: "wrap" }}>
               <div>
-                <Reveal><Kicker T={T} num="02">Expertise</Kicker></Reveal>
+                <Reveal><Kicker T={T} num="04">Expertise</Kicker></Reveal>
                 <Reveal delay={80}>
                   <h2 style={{ fontSize: "clamp(28px, 4vw, 44px)", fontWeight: 500, lineHeight: 1.1,
                     letterSpacing: "-0.025em", color: T.text, margin: 0 }}>What I do.</h2>
@@ -627,7 +640,7 @@ export default function Site() {
           <section id="cases" style={{ padding: "100px 0", borderTop: `0.5px solid ${T.border}` }}>
             <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 40, gap: 24, flexWrap: "wrap" }}>
               <div>
-                <Reveal><Kicker T={T} num="03">Selected work</Kicker></Reveal>
+                <Reveal><Kicker T={T} num="05">Selected work</Kicker></Reveal>
                 <Reveal delay={80}>
                   <h2 style={{ fontSize: "clamp(28px, 4vw, 44px)", fontWeight: 500, lineHeight: 1.1,
                     letterSpacing: "-0.025em", color: T.text, margin: 0 }}>Cases.</h2>
@@ -707,7 +720,7 @@ export default function Site() {
 
           {/* EXPERIENCE */}
           <section id="experience" style={{ padding: "100px 0", borderTop: `0.5px solid ${T.border}` }}>
-            <Reveal><Kicker T={T} num="04">Experience</Kicker></Reveal>
+            <Reveal><Kicker T={T} num="06">Experience</Kicker></Reveal>
             <Reveal delay={80}>
               <h2 style={{ fontSize: "clamp(28px, 4vw, 44px)", fontWeight: 500, lineHeight: 1.1,
                 letterSpacing: "-0.025em", color: T.text, margin: "0 0 44px" }}>Career timeline.</h2>
@@ -761,7 +774,7 @@ export default function Site() {
           <section id="contact" style={{ padding: "100px 0 64px", borderTop: `0.5px solid ${T.border}`, position: "relative" }}>
             <div className="ap-contact-grid" style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 64, alignItems: "start" }}>
               <div>
-                <Reveal><Kicker T={T} num="05">Contact</Kicker></Reveal>
+                <Reveal><Kicker T={T} num="07">Contact</Kicker></Reveal>
                 <Reveal delay={80}>
                   <h2 style={{ fontSize: "clamp(36px, 5vw, 64px)", fontWeight: 500, lineHeight: 1.0,
                     letterSpacing: "-0.03em", color: T.text, margin: "0 0 28px" }}>
@@ -854,3 +867,147 @@ export default function Site() {
     </div>
   );
 }
+
+/* ─── Projects (portfolio cards) ──────────────────────────────────── */
+function Projects({ T, data }) {
+  const items = (data.projects || []).filter(p => !p.hidden);
+  if (!items.length) return null;
+
+  const companyAccent = (c) => {
+    if (/self/i.test(c))     return { color: T.text, bg: T.surface,                 border: T.borderHi };
+    if (/vibecode/i.test(c)) return { color: T.acc,  bg: `rgba(${T.accGlow},0.08)`, border: `rgba(${T.accGlow},0.35)` };
+    return { color: T.text, bg: T.surface, border: T.borderHi };
+  };
+  const statusMeta = (s) => s === "ready"
+    ? { label: "Ready",          dotColor: T.ok,  tint: T.ok }
+    : { label: "In development", dotColor: T.acc, tint: T.acc };
+
+  return (
+    <section id="projects" style={{ padding: "100px 0", borderTop: `0.5px solid ${T.border}` }}>
+      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 40, gap: 24, flexWrap: "wrap" }}>
+        <div>
+          <Reveal><Kicker T={T} num="01">Projects</Kicker></Reveal>
+          <Reveal delay={80}>
+            <h2 style={{
+              fontSize: "clamp(28px, 4vw, 44px)", fontWeight: 500,
+              lineHeight: 1.1, letterSpacing: "-0.025em", color: T.text, margin: 0
+            }}>Projects.</h2>
+          </Reveal>
+        </div>
+        <Reveal delay={160}>
+          <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: T.textTer, letterSpacing: "0.06em" }}>
+            {String(items.length).padStart(2, "0")} tracked
+          </span>
+        </Reveal>
+      </div>
+
+      <div className="projects-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20 }}>
+        {items.map((p, idx) => {
+          const sm = statusMeta(p.status);
+          const co = companyAccent(p.company);
+          const iconPath = PROJECT_ICONS[p.icon] || PROJECT_ICONS.globe;
+          return (
+            <Reveal key={p.id ?? idx} delay={idx * 80}>
+              <div style={{
+                display: "flex", flexDirection: "column",
+                background: T.bg2, border: `0.5px solid ${T.border}`, borderRadius: 12,
+                overflow: "hidden", height: "100%", transition: "border-color 0.25s, transform 0.25s"
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = T.borderHi; e.currentTarget.style.transform = "translateY(-2px)"; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = T.border;   e.currentTarget.style.transform = "translateY(0)"; }}>
+
+                {/* Image / screenshot slot */}
+                <div style={{
+                  position: "relative", aspectRatio: "16 / 10",
+                  background: p.image ? `url(${p.image}) center/cover` : `linear-gradient(135deg, ${T.surface} 0%, ${T.bg} 100%)`,
+                  borderBottom: `0.5px solid ${T.border}`,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  overflow: "hidden"
+                }}>
+                  {!p.image && (
+                    <>
+                      <svg width="100%" height="100%" style={{ position: "absolute", inset: 0, opacity: 0.5 }}>
+                        <defs>
+                          <pattern id={`pgrid-${p.id ?? idx}`} width="24" height="24" patternUnits="userSpaceOnUse">
+                            <path d="M 24 0 L 0 0 0 24" fill="none" stroke={T.border} strokeWidth="0.5" />
+                          </pattern>
+                        </defs>
+                        <rect width="100%" height="100%" fill={`url(#pgrid-${p.id ?? idx})`} />
+                      </svg>
+                      <div style={{
+                        position: "relative", display: "flex", alignItems: "center", justifyContent: "center",
+                        width: 56, height: 56, borderRadius: 12,
+                        background: T.bg2, border: `0.5px solid ${T.borderHi}`,
+                        boxShadow: `0 0 0 6px ${T.surface}, 0 0 32px rgba(${T.accGlow},0.18)`
+                      }}>
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={T.acc} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d={iconPath} />
+                        </svg>
+                      </div>
+                      {p.placeholder && (
+                        <span style={{
+                          position: "absolute", bottom: 10, left: 12,
+                          fontFamily: "var(--mono)", fontSize: 9.5, color: T.textTer,
+                          letterSpacing: "0.08em", textTransform: "uppercase"
+                        }}>↳ {p.placeholder}</span>
+                      )}
+                    </>
+                  )}
+                  <span style={{
+                    position: "absolute", top: 12, right: 14,
+                    fontFamily: "var(--mono)", fontSize: 10,
+                    color: p.image ? "#fff" : T.textTer,
+                    letterSpacing: "0.08em",
+                    textShadow: p.image ? "0 1px 4px rgba(0,0,0,0.5)" : "none"
+                  }}>/{String(idx + 1).padStart(2, "0")}</span>
+                </div>
+
+                {/* Body */}
+                <div style={{ padding: "20px 22px 22px", display: "flex", flexDirection: "column", gap: 14, flex: 1 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                    <span style={{
+                      display: "inline-flex", alignItems: "center", gap: 7,
+                      fontFamily: "var(--mono)", fontSize: 10, color: sm.tint,
+                      padding: "3px 8px",
+                      background: `rgba(${T.accGlow},${p.status === "ready" ? 0 : 0.06})`,
+                      border: `0.5px solid ${sm.tint === T.ok ? "rgba(74,222,128,0.35)" : `rgba(${T.accGlow},0.35)`}`,
+                      borderRadius: 3, letterSpacing: "0.08em", textTransform: "uppercase"
+                    }}>
+                      <AnalyticalDot size={5} color={sm.dotColor} pulse={p.status !== "ready"} />
+                      {sm.label}
+                    </span>
+                    <span style={{
+                      fontFamily: "var(--mono)", fontSize: 10.5, color: T.textTer,
+                      letterSpacing: "0.04em", fontVariantNumeric: "tabular-nums"
+                    }}>
+                      {p.status === "ready" ? "Shipped" : "ETA"} · {p.date}
+                    </span>
+                  </div>
+
+                  <h3 style={{
+                    fontSize: 17, fontWeight: 500, color: T.text,
+                    margin: 0, letterSpacing: "-0.01em", lineHeight: 1.25
+                  }}>{p.title}</h3>
+
+                  <p style={{ fontSize: 13, color: T.textSec, lineHeight: 1.6, margin: 0, flex: 1 }}>
+                    {p.desc}
+                  </p>
+
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: "auto", paddingTop: 12, borderTop: `0.5px dashed ${T.border}` }}>
+                    <span style={{
+                      fontFamily: "var(--mono)", fontSize: 9.5,
+                      padding: "3px 7px", borderRadius: 3, letterSpacing: "0.06em", textTransform: "uppercase",
+                      color: co.color, background: co.bg, border: `0.5px solid ${co.border}`
+                    }}>{p.company}</span>
+                    {p.domain && <Tag T={T} accent>{p.domain}</Tag>}
+                  </div>
+                </div>
+              </div>
+            </Reveal>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
