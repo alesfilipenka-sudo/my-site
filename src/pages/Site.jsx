@@ -44,6 +44,24 @@ const EXP_ICONS = {
   ppl: "M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75",
 };
 
+const normalizeCase = (c) => {
+  let tags = c.tags;
+  if (Array.isArray(tags)) {
+    // ok
+  } else if (typeof tags === "string") {
+    // text-колонка в БД: может быть "a,b,c" или JSON-строка "[\"a\",\"b\"]"
+    const trimmed = tags.trim();
+    if (trimmed.startsWith("[")) {
+      try { tags = JSON.parse(trimmed); } catch { tags = trimmed.split(",").map(s => s.trim()).filter(Boolean); }
+    } else {
+      tags = trimmed ? trimmed.split(",").map(s => s.trim()).filter(Boolean) : [];
+    }
+  } else {
+    tags = [];
+  }
+  return { ...c, tags };
+};
+
 const PROJECT_ICONS = {
   globe:  "M12 2a10 10 0 100 20 10 10 0 000-20zM2 12h20M12 2a15 15 0 010 20M12 2a15 15 0 000 20",
   kanban: "M5 4h4v16H5zM10 4h4v10h-4zM15 4h4v6h-4z",
@@ -239,7 +257,7 @@ export default function Site() {
           domains:    byKey.domains   ?? [],
           stats:      byKey.stats     ?? [],
           expertise:  byKey.expertise ?? [],
-          cases:      casesRes.data   ?? [],
+          cases:      (casesRes.data ?? []).map(normalizeCase),
           experience: expRes.data     ?? [],
           projects:   projectsRes.data ?? [],
         };

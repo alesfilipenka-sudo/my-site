@@ -37,6 +37,29 @@ const SECTIONS = [
   { id: "domains",    label: "Domains",    num: "09" },
 ];
 
+const serializeCase = (c) => {
+  if (Array.isArray(c.tags)) return { ...c, tags: c.tags.join(", ") };
+  return c;
+};
+
+const normalizeCase = (c) => {
+  let tags = c.tags;
+  if (Array.isArray(tags)) {
+    // ok
+  } else if (typeof tags === "string") {
+    // text-колонка в БД: может быть "a,b,c" или JSON-строка "[\"a\",\"b\"]"
+    const trimmed = tags.trim();
+    if (trimmed.startsWith("[")) {
+      try { tags = JSON.parse(trimmed); } catch { tags = trimmed.split(",").map(s => s.trim()).filter(Boolean); }
+    } else {
+      tags = trimmed ? trimmed.split(",").map(s => s.trim()).filter(Boolean) : [];
+    }
+  } else {
+    tags = [];
+  }
+  return { ...c, tags };
+};
+
 const nextId = (list = []) => (list.length ? Math.max(...list.map(x => x.id || 0)) + 1 : 1);
 
 /* ───────────────────────────  ROOT  ─────────────────────────── */
@@ -75,7 +98,7 @@ export default function Admin() {
       domains:    byKey.domains    ?? [],
       stats:      byKey.stats      ?? [],
       expertise:  byKey.expertise  ?? [],
-      cases:      casesRes.data    ?? [],
+      cases:      (casesRes.data ?? []).map(normalizeCase),
       experience: expRes.data      ?? [],
       projects:   projectsRes.data ?? [],
     };
@@ -175,14 +198,14 @@ export default function Admin() {
         return { fresh, existing };
       };
 
-      // 2. cases
+      // 2. cases  (tags-массив → CSV-строка под text-колонку)
       const c = split(data.cases);
       if (c.existing.length) {
-        const r = await supabase.from("cases").upsert(c.existing, { onConflict: "id" });
+        const r = await supabase.from("cases").upsert(c.existing.map(serializeCase), { onConflict: "id" });
         if (r.error) throw r.error;
       }
       if (c.fresh.length) {
-        const r = await supabase.from("cases").insert(c.fresh);
+        const r = await supabase.from("cases").insert(c.fresh.map(serializeCase));
         if (r.error) throw r.error;
       }
 
