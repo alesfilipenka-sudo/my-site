@@ -243,6 +243,22 @@ export default function Site() {
           experience: expRes.data     ?? [],
           projects:   projectsRes.data ?? [],
         };
+
+        // Если в Supabase ещё нет baseline-секций (hero/about/...) — подмешиваем
+        // их из public/content.json. Cases/experience/projects всегда из БД.
+        if (!json.hero?.name) {
+          try {
+            const r = await fetch(`/content.json?v=${Date.now()}`);
+            const fb = await r.json();
+            json.hero      = { ...(fb.hero || {}), ...json.hero };
+            json.about     = json.about              || fb.about     || "";
+            json.stack     = json.stack?.length      ? json.stack     : (fb.stack     || []);
+            json.domains   = json.domains?.length    ? json.domains   : (fb.domains   || []);
+            json.stats     = json.stats?.length      ? json.stats     : (fb.stats     || []);
+            json.expertise = json.expertise?.length  ? json.expertise : (fb.expertise || []);
+          } catch { /* baseline недоступен — нечего поделать */ }
+        }
+
         if (!cancelled) setData(json);
       } catch {
         // fallback на статичный content.json при ошибке сети/Supabase
