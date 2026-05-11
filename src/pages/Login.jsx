@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useSearchParams, Link } from "react-router-dom";
-import { useAuth, login } from "../lib/auth";
+import { useAuth, login, logout } from "../lib/auth";
 
 const C = {
   bg: "#0a0a0a",
@@ -26,6 +26,10 @@ export default function Login() {
       window.location.assign(returnTo);
     }
   }, [loading, user, returnTo]);
+
+  // Залогинен, но не в admin allow-list — покажем человеческое сообщение
+  // вместо безмолвного редиректа.
+  const isLoggedInNotAdmin = !loading && user && user.role !== "admin";
 
   return (
     <div style={{
@@ -70,6 +74,29 @@ export default function Login() {
             color: "#fecaca", fontSize: 12.5, padding: "10px 12px", borderRadius: 8, marginBottom: 16,
           }}>
             {decodeURIComponent(errorParam)}
+          </div>
+        )}
+
+        {isLoggedInNotAdmin && (
+          <div style={{
+            background: "rgba(217,119,6,0.10)", border: `1px solid #d9770655`,
+            color: "#fde68a", fontSize: 12.5, padding: "12px 14px", borderRadius: 8, marginBottom: 16,
+            lineHeight: 1.5,
+          }}>
+            <div style={{ fontWeight: 600, marginBottom: 6, color: "#fbbf24" }}>
+              Вы вошли как <span style={{ color: "#fff" }}>@{user.login || user.email}</span>, но не в списке администраторов.
+            </div>
+            <div style={{ opacity: 0.85 }}>
+              Добавьте этот email/логин в <code>VITE_ADMIN_EMAILS</code> или <code>VITE_ADMIN_USERS</code> в Netlify env и пересоберите сайт.
+            </div>
+            <button
+              onClick={logout}
+              style={{
+                marginTop: 10, padding: "6px 12px", borderRadius: 6,
+                background: "transparent", border: `1px solid ${C.bd}`,
+                color: C.txMu, fontSize: 12, cursor: "pointer",
+              }}
+            >Sign out</button>
           </div>
         )}
 
