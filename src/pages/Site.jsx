@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import SiteSkeleton from "../components/SiteSkeleton";
+import { supabase } from "../lib/supabase";
 
 /* ─── Tokens ───────────────────────────────────────────────── */
 const ACCENT = { hex: "#6366F1", glow: "99,102,241" }; // Electric Indigo
@@ -216,7 +217,44 @@ export default function Site() {
   const [time, setTime] = useState(new Date());
 
   useEffect(() => {
-    fetch(`/content.json?v=${Date.now()}`).then(r => r.json()).then(setData);
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const [contentRes, casesRes, expRes, projectsRes] = await Promise.all([
+          supabase.from("site_content").select("*"),
+          supabase.from("cases").select("*").order("id", { ascending: true }),
+          supabase.from("experience").select("*").order("id", { ascending: true }),
+          supabase.from("projects").select("*").order("sort_order", { ascending: true }),
+        ]);
+        if (contentRes.error || casesRes.error || expRes.error || projectsRes.error) {
+          throw contentRes.error || casesRes.error || expRes.error || projectsRes.error;
+        }
+        const byKey = Object.fromEntries(
+          (contentRes.data || []).map(row => [row.key, row.data])
+        );
+        const json = {
+          hero:       byKey.hero      ?? {},
+          about:      byKey.about     ?? "",
+          stack:      byKey.stack     ?? [],
+          domains:    byKey.domains   ?? [],
+          stats:      byKey.stats     ?? [],
+          expertise:  byKey.expertise ?? [],
+          cases:      casesRes.data   ?? [],
+          experience: expRes.data     ?? [],
+          projects:   projectsRes.data ?? [],
+        };
+        if (!cancelled) setData(json);
+      } catch {
+        // fallback на статичный content.json при ошибке сети/Supabase
+        try {
+          const r = await fetch(`/content.json?v=${Date.now()}`);
+          const json = await r.json();
+          if (!cancelled) setData(json);
+        } catch { /* show skeleton forever */ }
+      }
+    };
+    load();
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
