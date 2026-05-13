@@ -1,32 +1,13 @@
 import { useState, useEffect, useRef } from "react";
+import { Link } from "react-router-dom";
 import SiteSkeleton from "../components/SiteSkeleton";
 import { supabase } from "../lib/supabase";
+import { tokens, ACCENT } from "../lib/tokens.js";
+import { AnalyticalDot, Tag } from "../lib/projectAssets.jsx";
+import { PROJECT_ICONS } from "../lib/projectIcons.js";
+import ProjectCard from "../components/ProjectCard.jsx";
 
 /* ─── Tokens ───────────────────────────────────────────────── */
-const ACCENT = { hex: "#6366F1", glow: "99,102,241" }; // Electric Indigo
-
-function tokens(dark) {
-  const acc = ACCENT;
-  if (dark) return {
-    bg: "#0A0A0B", bg2: "#0F0F11",
-    surface: "rgba(255,255,255,0.02)", surfaceHi: "rgba(255,255,255,0.04)",
-    glass: "rgba(10,10,11,0.55)",
-    text: "#EDEDF0", textSec: "#8B8B95", textTer: "#52525B",
-    border: "rgba(255,255,255,0.06)", borderMd: "rgba(255,255,255,0.10)", borderHi: "rgba(255,255,255,0.16)",
-    grid: "rgba(255,255,255,0.025)",
-    acc: acc.hex, accGlow: acc.glow, ok: "#84D2A8",
-  };
-  return {
-    bg: "#F7F7F5", bg2: "#FCFCFA",
-    surface: "rgba(0,0,0,0.015)", surfaceHi: "rgba(0,0,0,0.03)",
-    glass: "rgba(247,247,245,0.65)",
-    text: "#0A0A0B", textSec: "#52525B", textTer: "#A1A1AA",
-    border: "rgba(0,0,0,0.06)", borderMd: "rgba(0,0,0,0.10)", borderHi: "rgba(0,0,0,0.18)",
-    grid: "rgba(0,0,0,0.03)",
-    acc: acc.hex, accGlow: acc.glow, ok: "#1D9E75",
-  };
-}
-
 const NAV_ITEMS = ["Projects", "About", "Expertise", "Cases", "Experience", "Contact"];
 
 const FLOW_STEPS = [
@@ -60,14 +41,6 @@ const normalizeCase = (c) => {
     tags = [];
   }
   return { ...c, tags };
-};
-
-const PROJECT_ICONS = {
-  globe:  "M12 2a10 10 0 100 20 10 10 0 000-20zM2 12h20M12 2a15 15 0 010 20M12 2a15 15 0 000 20",
-  kanban: "M5 4h4v16H5zM10 4h4v10h-4zM15 4h4v6h-4z",
-  spark:  "M12 2l2.5 6.5L21 11l-6.5 2.5L12 20l-2.5-6.5L3 11l6.5-2.5L12 2z",
-  chart:  "M3 3v18h18M7 14l3-3 3 3 5-5",
-  box:    "M21 8L12 3 3 8v8l9 5 9-5V8zM3 8l9 5 9-5M12 13v9",
 };
 
 /* ─── Hooks & primitives ──────────────────────────────────── */
@@ -111,21 +84,6 @@ function Magnetic({ children, strength = 0.25, style }) {
   );
 }
 
-function AnalyticalDot({ size = 8, color, pulse = false, style }) {
-  return (
-    <span style={{ display: "inline-block", position: "relative", width: size, height: size, ...style }}>
-      <span style={{ position: "absolute", inset: 0, borderRadius: "50%", background: color, opacity: 0.9 }} />
-      {pulse && (
-        <span style={{
-          position: "absolute", inset: -3, borderRadius: "50%",
-          border: `1px solid ${color}`, opacity: 0.4,
-          animation: "ap-pulseRing 2.4s ease-out infinite",
-        }} />
-      )}
-    </span>
-  );
-}
-
 function Crosshair({ size = 6, color, style }) {
   return (
     <svg width={size * 2} height={size * 2} viewBox={`0 0 ${size * 2} ${size * 2}`} style={style}>
@@ -146,20 +104,6 @@ function Kicker({ children, T, num }) {
       <span style={{ height: 1, flex: "0 0 32px", background: T.borderHi }} />
       <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: T.textSec, letterSpacing: "0.18em", textTransform: "uppercase", fontWeight: 500 }}>{children}</span>
     </div>
-  );
-}
-
-function Tag({ children, T, accent }) {
-  return (
-    <span style={{
-      display: "inline-flex", alignItems: "center", gap: 6,
-      padding: "4px 10px", borderRadius: 4,
-      fontFamily: "var(--mono)", fontSize: 10.5, letterSpacing: "0.04em",
-      textTransform: "uppercase", fontWeight: 500,
-      background: accent ? `rgba(${T.accGlow},0.08)` : T.surface,
-      color: accent ? T.acc : T.textSec,
-      border: `0.5px solid ${accent ? `rgba(${T.accGlow},0.35)` : T.border}`,
-    }}>{children}</span>
   );
 }
 
@@ -942,17 +886,14 @@ export default function Site() {
 
 /* ─── Projects (portfolio cards) ──────────────────────────────────── */
 function Projects({ T, data }) {
-  const items = (data.projects || []).filter(p => !p.hidden);
-  if (!items.length) return null;
+  const all = (data.projects || [])
+    .filter(p => !p.hidden)
+    .sort((a, b) => (a.sort_order ?? 100) - (b.sort_order ?? 100));
+  if (!all.length) return null;
 
-  const companyAccent = (c) => {
-    if (/self/i.test(c))     return { color: T.text, bg: T.surface,                 border: T.borderHi };
-    if (/vibecode/i.test(c)) return { color: T.acc,  bg: `rgba(${T.accGlow},0.08)`, border: `rgba(${T.accGlow},0.35)` };
-    return { color: T.text, bg: T.surface, border: T.borderHi };
-  };
-  const statusMeta = (s) => s === "ready"
-    ? { label: "Ready",          dotColor: T.ok,  tint: T.ok }
-    : { label: "In development", dotColor: T.acc, tint: T.acc };
+  const HOME_LIMIT = 3;
+  const items   = all.slice(0, HOME_LIMIT);
+  const hasMore = all.length > HOME_LIMIT;
 
   return (
     <section id="projects" style={{ padding: "100px 0", borderTop: `0.5px solid ${T.border}` }}>
@@ -962,123 +903,66 @@ function Projects({ T, data }) {
           <Reveal delay={80}>
             <h2 style={{
               fontSize: "clamp(28px, 4vw, 44px)", fontWeight: 500,
-              lineHeight: 1.1, letterSpacing: "-0.025em", color: T.text, margin: 0
+              lineHeight: 1.1, letterSpacing: "-0.025em", color: T.text, margin: 0,
             }}>Projects.</h2>
           </Reveal>
         </div>
         <Reveal delay={160}>
           <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: T.textTer, letterSpacing: "0.06em" }}>
-            {String(items.length).padStart(2, "0")} tracked
+            {String(all.length).padStart(2, "0")} tracked
           </span>
         </Reveal>
       </div>
 
       <div className="projects-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20 }}>
-        {items.map((p, idx) => {
-          const sm = statusMeta(p.status);
-          const co = companyAccent(p.company);
-          const iconPath = PROJECT_ICONS[p.icon] || PROJECT_ICONS.globe;
-          return (
-            <Reveal key={p.id ?? idx} delay={idx * 80}>
-              <div style={{
-                display: "flex", flexDirection: "column",
-                background: T.bg2, border: `0.5px solid ${T.border}`, borderRadius: 12,
-                overflow: "hidden", height: "100%", transition: "border-color 0.25s, transform 0.25s"
-              }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = T.borderHi; e.currentTarget.style.transform = "translateY(-2px)"; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = T.border;   e.currentTarget.style.transform = "translateY(0)"; }}>
-
-                {/* Image / screenshot slot */}
-                <div style={{
-                  position: "relative", aspectRatio: "16 / 10",
-                  background: p.image ? `url(${p.image}) center/cover` : `linear-gradient(135deg, ${T.surface} 0%, ${T.bg} 100%)`,
-                  borderBottom: `0.5px solid ${T.border}`,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  overflow: "hidden"
-                }}>
-                  {!p.image && (
-                    <>
-                      <svg width="100%" height="100%" style={{ position: "absolute", inset: 0, opacity: 0.5 }}>
-                        <defs>
-                          <pattern id={`pgrid-${p.id ?? idx}`} width="24" height="24" patternUnits="userSpaceOnUse">
-                            <path d="M 24 0 L 0 0 0 24" fill="none" stroke={T.border} strokeWidth="0.5" />
-                          </pattern>
-                        </defs>
-                        <rect width="100%" height="100%" fill={`url(#pgrid-${p.id ?? idx})`} />
-                      </svg>
-                      <div style={{
-                        position: "relative", display: "flex", alignItems: "center", justifyContent: "center",
-                        width: 56, height: 56, borderRadius: 12,
-                        background: T.bg2, border: `0.5px solid ${T.borderHi}`,
-                        boxShadow: `0 0 0 6px ${T.surface}, 0 0 32px rgba(${T.accGlow},0.18)`
-                      }}>
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={T.acc} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                          <path d={iconPath} />
-                        </svg>
-                      </div>
-                      {p.placeholder && (
-                        <span style={{
-                          position: "absolute", bottom: 10, left: 12,
-                          fontFamily: "var(--mono)", fontSize: 9.5, color: T.textTer,
-                          letterSpacing: "0.08em", textTransform: "uppercase"
-                        }}>↳ {p.placeholder}</span>
-                      )}
-                    </>
-                  )}
-                  <span style={{
-                    position: "absolute", top: 12, right: 14,
-                    fontFamily: "var(--mono)", fontSize: 10,
-                    color: p.image ? "#fff" : T.textTer,
-                    letterSpacing: "0.08em",
-                    textShadow: p.image ? "0 1px 4px rgba(0,0,0,0.5)" : "none"
-                  }}>/{String(idx + 1).padStart(2, "0")}</span>
-                </div>
-
-                {/* Body */}
-                <div style={{ padding: "20px 22px 22px", display: "flex", flexDirection: "column", gap: 14, flex: 1 }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                    <span style={{
-                      display: "inline-flex", alignItems: "center", gap: 7,
-                      fontFamily: "var(--mono)", fontSize: 10, color: sm.tint,
-                      padding: "3px 8px",
-                      background: `rgba(${T.accGlow},${p.status === "ready" ? 0 : 0.06})`,
-                      border: `0.5px solid ${sm.tint === T.ok ? "rgba(74,222,128,0.35)" : `rgba(${T.accGlow},0.35)`}`,
-                      borderRadius: 3, letterSpacing: "0.08em", textTransform: "uppercase"
-                    }}>
-                      <AnalyticalDot size={5} color={sm.dotColor} pulse={p.status !== "ready"} />
-                      {sm.label}
-                    </span>
-                    <span style={{
-                      fontFamily: "var(--mono)", fontSize: 10.5, color: T.textTer,
-                      letterSpacing: "0.04em", fontVariantNumeric: "tabular-nums"
-                    }}>
-                      {p.status === "ready" ? "Shipped" : "ETA"} · {p.date}
-                    </span>
-                  </div>
-
-                  <h3 style={{
-                    fontSize: 17, fontWeight: 500, color: T.text,
-                    margin: 0, letterSpacing: "-0.01em", lineHeight: 1.25
-                  }}>{p.title}</h3>
-
-                  <p style={{ fontSize: 13, color: T.textSec, lineHeight: 1.6, margin: 0, flex: 1 }}>
-                    {p.desc}
-                  </p>
-
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: "auto", paddingTop: 12, borderTop: `0.5px dashed ${T.border}` }}>
-                    <span style={{
-                      fontFamily: "var(--mono)", fontSize: 9.5,
-                      padding: "3px 7px", borderRadius: 3, letterSpacing: "0.06em", textTransform: "uppercase",
-                      color: co.color, background: co.bg, border: `0.5px solid ${co.border}`
-                    }}>{p.company}</span>
-                    {p.domain && <Tag T={T} accent>{p.domain}</Tag>}
-                  </div>
-                </div>
-              </div>
-            </Reveal>
-          );
-        })}
+        {items.map((p, idx) => (
+          <Reveal key={p.id ?? idx} delay={idx * 80}>
+            <ProjectCard T={T} p={p} idx={idx} />
+          </Reveal>
+        ))}
       </div>
+
+      {hasMore && (
+        <Reveal delay={items.length * 80 + 80}>
+          <div style={{ marginTop: 28, display: "flex", justifyContent: "center" }}>
+            <Link to="/projects" style={{
+              display: "inline-flex", alignItems: "center", gap: 12,
+              padding: "14px 28px",
+              background: T.bg2,
+              border: `0.5px solid ${T.borderHi}`,
+              borderRadius: 999,
+              color: T.text,
+              fontFamily: "var(--mono)", fontSize: 11.5,
+              letterSpacing: "0.06em", textTransform: "uppercase",
+              textDecoration: "none",
+              transition: "all 0.25s",
+              position: "relative", overflow: "hidden",
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.borderColor = `rgba(${T.accGlow},0.55)`;
+              e.currentTarget.style.background  = `rgba(${T.accGlow},0.06)`;
+              e.currentTarget.style.boxShadow   = `0 0 32px rgba(${T.accGlow},0.15)`;
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.borderColor = T.borderHi;
+              e.currentTarget.style.background  = T.bg2;
+              e.currentTarget.style.boxShadow   = "none";
+            }}>
+              <span>View all projects</span>
+              <span style={{
+                fontFamily: "var(--mono)", fontSize: 10.5,
+                color: T.acc,
+                padding: "2px 8px",
+                background: `rgba(${T.accGlow},0.10)`,
+                border: `0.5px solid rgba(${T.accGlow},0.35)`,
+                borderRadius: 999,
+                letterSpacing: "0.04em",
+              }}>{String(all.length).padStart(2, "0")}</span>
+              <span style={{ color: T.acc, fontSize: 14, lineHeight: 1 }}>→</span>
+            </Link>
+          </div>
+        </Reveal>
+      )}
     </section>
   );
 }
