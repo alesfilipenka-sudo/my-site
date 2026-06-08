@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { tokens } from "../lib/tokens.js";
+import { useTheme } from "../lib/theme.js";
+import SiteHeader from "../components/SiteHeader.jsx";
 import ProjectCard from "../components/ProjectCard.jsx";
 import { AnalyticalDot, Tag } from "../lib/projectAssets.jsx";
 
@@ -83,12 +85,8 @@ function FacetGroup({ T, title, items, selected, onToggle, countFn }) {
 
 /* ── Main page ──────────────────────────────────────────────────── */
 export default function ProjectsPage() {
-  // theme
-  const [dark, setDark] = useState(false);
-  useEffect(() => {
-    const sys = window.matchMedia("(prefers-color-scheme: dark)");
-    setDark(sys.matches);
-  }, []);
+  // theme — общий хук, синхронизирован с главной через localStorage
+  const [dark] = useTheme();
   const T = tokens(dark);
 
   // data
@@ -158,7 +156,8 @@ export default function ProjectsPage() {
       background: T.bg, color: T.text, minHeight: "100vh",
       fontFamily: "Inter, system-ui, sans-serif",
     }}>
-      <div style={{ maxWidth: 1280, margin: "0 auto", padding: "60px 64px 80px" }} className="projects-archive-shell">
+      <SiteHeader data={{ hero: {} }} />
+      <div style={{ maxWidth: 1280, margin: "0 auto", padding: "40px 64px 80px" }} className="projects-archive-shell">
 
         {/* Header */}
         <div style={{ marginBottom: 32 }}>
