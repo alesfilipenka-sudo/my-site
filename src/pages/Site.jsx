@@ -6,9 +6,10 @@ import { tokens, ACCENT } from "../lib/tokens.js";
 import { AnalyticalDot, Tag } from "../lib/projectAssets.jsx";
 import { PROJECT_ICONS } from "../lib/projectIcons.js";
 import ProjectCard from "../components/ProjectCard.jsx";
+import SiteHeader from "../components/SiteHeader.jsx";
+import { useTheme } from "../lib/theme.js";
 
 /* ─── Tokens ───────────────────────────────────────────────── */
-const NAV_ITEMS = ["Projects", "About", "Expertise", "Cases", "Experience", "Contact"];
 
 const FLOW_STEPS = [
   { k: "01", label: "Discovery",    points: ["Stakeholder interviews", "Business context analysis", "Problem framing", "Scope definition"] },
@@ -172,9 +173,7 @@ function HeroBackdrop({ T }) {
 /* ─── Main page ───────────────────────────────────────────── */
 export default function Site() {
   const [data, setData] = useState(null);
-  const [dark, setDark] = useState(true);
-  const [scrolled, setScrolled] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const [dark] = useTheme();
   const [openCase, setOpenCase] = useState(null);
   const [time, setTime] = useState(new Date());
 
@@ -236,17 +235,6 @@ export default function Site() {
   }, []);
 
   useEffect(() => {
-    const sys = window.matchMedia("(prefers-color-scheme: dark)");
-    setDark(sys.matches);
-  }, []);
-
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 24);
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-
-  useEffect(() => {
     const id = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(id);
   }, []);
@@ -261,11 +249,6 @@ export default function Site() {
   const experience = (data.experience || []).filter(e => !e.hidden);
 
   if (openCase === null && cases[0]) openCase; // no-op, just to mention
-
-  const scrollTo = (id) => {
-    setMobileOpen(false);
-    document.getElementById(id.toLowerCase())?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
 
   const css = `
     :root {
@@ -305,13 +288,6 @@ export default function Site() {
     }
   `;
 
-  const socialBtn = {
-    display: "inline-flex", alignItems: "center", justifyContent: "center",
-    width: 32, height: 32, borderRadius: 6,
-    color: T.textSec, border: `0.5px solid ${T.border}`,
-    background: T.surface, transition: "color 0.2s, border-color 0.2s",
-  };
-
   return (
     <div style={{ position: "relative", minHeight: "100vh", background: T.bg, color: T.text }}>
       <style>{css}</style>
@@ -332,89 +308,7 @@ export default function Site() {
       <Crosshair color={T.borderHi} style={{ position: "fixed", bottom: 16, right: 16, zIndex: 1 }} />
 
       <div style={{ position: "relative", zIndex: 2 }}>
-        {/* NAV */}
-        <nav style={{
-          position: "sticky", top: 0, zIndex: 50,
-          background: scrolled ? T.glass : "transparent",
-          backdropFilter: scrolled ? "blur(20px) saturate(140%)" : "none",
-          WebkitBackdropFilter: scrolled ? "blur(20px) saturate(140%)" : "none",
-          borderBottom: `0.5px solid ${scrolled ? T.border : "transparent"}`,
-          transition: "background 0.3s, border-color 0.3s",
-        }}>
-          <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 24px",
-            display: "flex", alignItems: "center", justifyContent: "space-between", height: 64, gap: 16 }}>
-            <span style={{ display: "inline-flex", alignItems: "baseline",
-              fontSize: 17, fontWeight: 500, letterSpacing: "-0.01em", color: T.text }}>
-              <span style={{ color: T.textTer, fontSize: 14, marginRight: 1 }}>@</span>
-              <span>ales</span>
-              <span style={{ color: T.acc }}>f</span>
-              <span>ilipenka</span>
-            </span>
-
-            <div className="ap-nav-desktop" style={{ display: "flex", alignItems: "center", gap: 2 }}>
-              {NAV_ITEMS.filter(n => n !== "Contact").map((n, i) => (
-                <button key={n} onClick={() => scrollTo(n)} className="ap-nav-link"
-                  style={{ background: "none", border: "none", padding: "8px 12px",
-                    fontSize: 12.5, color: T.textSec, fontWeight: 500, borderRadius: 6, transition: "color 0.2s" }}>
-                  <span style={{ fontFamily: "var(--mono)", fontSize: 10, color: T.textTer, marginRight: 6 }}>
-                    {String(i + 1).padStart(2, "0")}
-                  </span>
-                  {n}
-                </button>
-              ))}
-              <div style={{ width: 1, height: 16, background: T.border, margin: "0 8px" }} />
-
-              <a href={`mailto:${data.hero.email}`} className="ap-nav-icon" style={socialBtn} title="Email"><SocialIcon kind="email" /></a>
-              {data.hero.linkedin && <a href={data.hero.linkedin} target="_blank" rel="noreferrer" className="ap-nav-icon" style={socialBtn} title="LinkedIn"><SocialIcon kind="linkedin" /></a>}
-              {data.hero.instagram && <a href={data.hero.instagram} target="_blank" rel="noreferrer" className="ap-nav-icon" style={socialBtn} title="Instagram"><SocialIcon kind="instagram" /></a>}
-              {data.hero.telegram && <a href={data.hero.telegram} target="_blank" rel="noreferrer" className="ap-nav-icon" style={socialBtn} title="Telegram"><SocialIcon kind="telegram" /></a>}
-
-              <button onClick={() => setDark(!dark)} className="ap-nav-icon" style={{ ...socialBtn, marginLeft: 4 }} title="Toggle theme">
-                <SocialIcon kind={dark ? "sun" : "moon"} />
-              </button>
-
-              <Magnetic strength={0.2} style={{ marginLeft: 4 }}>
-                <a href="#contact" onClick={(e) => { e.preventDefault(); scrollTo("Contact"); }}
-                  style={{
-                    display: "inline-flex", alignItems: "center", gap: 8,
-                    padding: "8px 14px", borderRadius: 6,
-                    background: T.acc, color: T.bg,
-                    fontSize: 12.5, fontWeight: 600, letterSpacing: "-0.01em",
-                    boxShadow: `0 0 0 0.5px ${T.acc}, 0 4px 24px -8px rgba(${T.accGlow},0.6)`,
-                  }}>
-                  <span style={{ width: 5, height: 5, borderRadius: "50%", background: T.bg, opacity: 0.6 }} />
-                  Get in touch
-                </a>
-              </Magnetic>
-            </div>
-
-            <button className="ap-nav-mobile-btn" onClick={() => setMobileOpen(o => !o)}
-              style={{ display: "none", background: T.surface, border: `0.5px solid ${T.border}`,
-                color: T.text, borderRadius: 6, padding: 8, alignItems: "center", justifyContent: "center" }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                {mobileOpen ? <path d="M18 6L6 18M6 6l12 12"/> : <path d="M3 12h18M3 6h18M3 18h18"/>}
-              </svg>
-            </button>
-          </div>
-
-          {mobileOpen && (
-            <div style={{ background: T.bg2, borderTop: `0.5px solid ${T.border}`, padding: "12px 24px 18px" }}>
-              {NAV_ITEMS.map(n => (
-                <button key={n} onClick={() => scrollTo(n)} style={{
-                  display: "block", width: "100%", textAlign: "left",
-                  padding: "12px 8px", background: "none", border: "none",
-                  borderBottom: `0.5px solid ${T.border}`, fontSize: 14, color: T.text, fontWeight: 500,
-                }}>{n}</button>
-              ))}
-              <div style={{ display: "flex", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
-                <a href={`mailto:${data.hero.email}`} style={{ ...socialBtn, width: "auto", padding: "0 12px", height: 36, gap: 8, fontSize: 12 }}><SocialIcon kind="email" /> Email</a>
-                {data.hero.linkedin && <a href={data.hero.linkedin} target="_blank" rel="noreferrer" style={{ ...socialBtn, width: "auto", padding: "0 12px", height: 36, gap: 8, fontSize: 12 }}><SocialIcon kind="linkedin" /> LinkedIn</a>}
-                {data.hero.instagram && <a href={data.hero.instagram} target="_blank" rel="noreferrer" style={{ ...socialBtn, width: "auto", padding: "0 12px", height: 36, gap: 8, fontSize: 12 }}><SocialIcon kind="instagram" /> Instagram</a>}
-                {data.hero.telegram && <a href={data.hero.telegram} target="_blank" rel="noreferrer" style={{ ...socialBtn, width: "auto", padding: "0 12px", height: 36, gap: 8, fontSize: 12 }}><SocialIcon kind="telegram" /> Telegram</a>}
-              </div>
-            </div>
-          )}
-        </nav>
+        <SiteHeader data={data} />
 
         <main className="ap-main" style={{ maxWidth: 1280, margin: "0 auto", padding: "0 32px" }}>
 
