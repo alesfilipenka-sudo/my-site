@@ -1,6 +1,19 @@
 import { AnalyticalDot, Tag } from "../lib/projectAssets.jsx";
 import { PROJECT_ICONS } from "../lib/projectIcons.js";
 
+/** Нормализует ссылку проекта: добавляет https://, пропускает только http(s). */
+function projectHref(url) {
+  const raw = (url || "").trim();
+  if (!raw) return null;
+  const withScheme = /^[a-z][a-z0-9+.-]*:/i.test(raw) ? raw : `https://${raw}`;
+  try {
+    const u = new URL(withScheme);
+    return u.protocol === "http:" || u.protocol === "https:" ? u.href : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Карточка проекта. Используется и в Site.jsx (компонент Projects, 3 колонки),
  * и в ProjectsPage.jsx (страница архива, 2 колонки). Вёрстка одинаковая.
@@ -19,6 +32,7 @@ export default function ProjectCard({ T, p, idx = 0 }) {
   const co = companyAccent(p.company);
   const iconPath = PROJECT_ICONS[p.icon] || PROJECT_ICONS.globe;
   const uid = p.id ?? idx;
+  const href = projectHref(p.url);
 
   return (
     <div style={{
@@ -115,6 +129,25 @@ export default function ProjectCard({ T, p, idx = 0 }) {
             color: co.color, background: co.bg, border: `0.5px solid ${co.border}`,
           }}>{p.company}</span>
           {p.domain && <Tag T={T} accent>{p.domain}</Tag>}
+          {href && (
+            <a href={href} target="_blank" rel="noopener noreferrer"
+               className="pc-visit"
+               aria-label={`Open ${p.title} in a new tab`}
+               style={{
+                 marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6,
+                 fontFamily: "var(--mono)", fontSize: 10, letterSpacing: "0.06em", textTransform: "uppercase",
+                 padding: "3px 8px", borderRadius: 3, textDecoration: "none",
+                 color: T.acc, background: `rgba(${T.accGlow},0.06)`, border: `0.5px solid rgba(${T.accGlow},0.35)`,
+                 transition: "background 0.2s, border-color 0.2s",
+               }}
+               onMouseEnter={e => { e.currentTarget.style.background = `rgba(${T.accGlow},0.14)`; e.currentTarget.style.borderColor = T.acc; }}
+               onMouseLeave={e => { e.currentTarget.style.background = `rgba(${T.accGlow},0.06)`; e.currentTarget.style.borderColor = `rgba(${T.accGlow},0.35)`; }}>
+              Visit
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M7 17L17 7M8 7h9v9" />
+              </svg>
+            </a>
+          )}
         </div>
       </div>
     </div>

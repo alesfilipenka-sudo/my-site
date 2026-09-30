@@ -323,7 +323,7 @@ export default function Admin() {
               action={<BtnGhost onClick={() => addToList("projects", {
                 title: "New project", desc: "", company: "Self-project",
                 domain: "", status: "in-dev", date: "", icon: "globe",
-                image: "", placeholder: "",
+                image: "", placeholder: "", url: "",
                 sort_order: (data.projects?.length || 0) * 10 + 10, hidden: false,
               })}>+ Add project</BtnGhost>}
             >
@@ -360,6 +360,8 @@ export default function Admin() {
                     <Field label="Placeholder caption" value={p.placeholder}
                            onChange={v => setListAt("projects", i, { placeholder: v })} />
                   </Row>
+                  <Field label="Project URL (кнопка «Visit ↗» на карточке; пусто — без кнопки)" value={p.url}
+                         onChange={v => setListAt("projects", i, { url: v })} />
                   <Field label="Sort order (lower = higher on page)"
                          value={String(p.sort_order ?? "")}
                          onChange={v => setListAt("projects", i, { sort_order: parseInt(v, 10) || 0 })} />
