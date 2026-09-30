@@ -1,25 +1,19 @@
-import { useEffect, useState } from "react";
+import { useTheme } from "../lib/theme.js";
+import { tokens } from "../lib/tokens.js";
 
 /**
  * Скелетон главного сайта.
  * Повторяет nav + hero, чтобы не было layout-shift при появлении реального контента.
- * Тема — auto (по времени суток + prefers-color-scheme), как в Site.jsx.
+ * Тема — общий useTheme() (localStorage → prefers-color-scheme), фон = tokens(dark).bg, как у Site.jsx.
  */
 export default function SiteSkeleton() {
-  const [dark, setDark] = useState(false);
+  const [dark] = useTheme();
+  const T = tokens(dark);
 
-  useEffect(() => {
-    const hour = new Date().getHours();
-    const isNight = hour >= 20 || hour < 7;
-    const sys = window.matchMedia?.("(prefers-color-scheme: dark)");
-    setDark(isNight || (sys?.matches ?? false));
-  }, []);
-
-  const bg     = dark ? "#0f0f0f" : "#ffffff";
-  const bg2    = dark ? "#1a1a1a" : "#f7f6f3";
+  const bg     = T.bg;
+  const bg2    = T.bg2;
   const tone1  = dark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)";
   const tone2  = dark ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.09)";
-  const border = dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)";
 
   const Bone = ({ w, h, r = 6, style }) => (
     <div className="sk-bone" style={{
@@ -43,7 +37,7 @@ export default function SiteSkeleton() {
 
       {/* nav */}
       <div style={{
-        height: 56, borderBottom: `0.5px solid ${border}`, background: bg,
+        height: 64, background: bg,
         display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "0 40px", maxWidth: 1200, margin: "0 auto", boxSizing: "border-box",
       }}>

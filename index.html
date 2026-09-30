@@ -4,8 +4,28 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#0f0f0f" media="(prefers-color-scheme: dark)" />
-    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#F7F7F5" />
+    <!-- Тема до загрузки JS: localStorage["theme"] → prefers-color-scheme. Без этого первый кадр и скелетон белые/чёрные невпопад. -->
+    <script>
+      (function () {
+        var d = false;
+        try {
+          var t = localStorage.getItem("theme");
+          d = t === "dark" || (t !== "light" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+        } catch (e) {
+          d = !!(window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+        }
+        var r = document.documentElement;
+        r.setAttribute("data-theme", d ? "dark" : "light");
+        r.style.colorScheme = d ? "dark" : "light";
+        var m = document.querySelector('meta[name="theme-color"]');
+        if (m) m.setAttribute("content", d ? "#0A0A0B" : "#F7F7F5");
+      })();
+    </script>
+    <style>
+      html, body { margin: 0; padding: 0; border: 0; background: #F7F7F5; }
+      html[data-theme="dark"], html[data-theme="dark"] body { background: #0A0A0B; }
+    </style>
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

@@ -1,11 +1,12 @@
 :root {
-  color-scheme: light dark;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Тема выставляется в <html data-theme> инлайн-скриптом в index.html
+   и обновляется в lib/theme.js при переключении. */
 html, body, #root {
   margin: 0;
   padding: 0;
@@ -16,10 +17,9 @@ html, body {
   background: #F7F7F5;
 }
 
-@media (prefers-color-scheme: dark) {
-  html, body {
-    background: #0A0A0B;
-  }
+html[data-theme="dark"],
+html[data-theme="dark"] body {
+  background: #0A0A0B;
 }
 
 #root {

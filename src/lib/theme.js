@@ -23,7 +23,17 @@ function readInitial() {
   return window.matchMedia?.("(prefers-color-scheme: dark)")?.matches ?? false;
 }
 
+/** Синхронизирует <html> (фон body, color-scheme, theme-color) с темой. */
+function applyToDocument(dark) {
+  if (typeof document === "undefined") return;
+  const r = document.documentElement;
+  r.setAttribute("data-theme", dark ? "dark" : "light");
+  r.style.colorScheme = dark ? "dark" : "light";
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", dark ? "#0A0A0B" : "#F7F7F5");
+}
+
 let current = readInitial();
+applyToDocument(current);
 
 export function useTheme() {
   const [dark, setLocal] = useState(current);
@@ -40,6 +50,7 @@ export function useTheme() {
   const setDark = (next) => {
     current = typeof next === "function" ? Boolean(next(current)) : Boolean(next);
     try { localStorage.setItem(STORAGE_KEY, current ? "dark" : "light"); } catch { /* quota / private mode */ }
+    applyToDocument(current);
     listeners.forEach((fn) => fn(current));
   };
 
