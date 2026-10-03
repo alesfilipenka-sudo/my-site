@@ -140,11 +140,18 @@ function HeroBackdrop({ T }) {
   const edges = [[0,1],[1,2],[2,3],[1,4],[4,5],[5,6],[2,6],[5,8],[7,8],[8,9],[9,10],[6,10],[3,11],[11,12],
     [13,14],[14,15],[15,16],[14,17],[17,18],[18,19],[19,20],[18,22],[21,22],[22,23],[19,23],
     [12,17],[11,17],[6,17],[10,21]];
+  /* Full-bleed: фон выходит за контейнер контента на всю ширину вьюпорта
+   * и мягко гаснет снизу — без видимых границ у колонки 1280px. */
+  const fade = "linear-gradient(to bottom, #000 0%, #000 65%, transparent 100%)";
   return (
-    <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: 0 }}
+    <div aria-hidden="true" style={{
+      position: "absolute", top: 0, bottom: 0, left: "50%", width: "100vw", transform: "translateX(-50%)",
+      pointerEvents: "none", zIndex: 0, maskImage: fade, WebkitMaskImage: fade,
+    }}>
+    <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
       viewBox="0 0 1200 600" preserveAspectRatio="xMidYMid slice">
       <defs>
-        <radialGradient id="ap-heroGlow" cx="80%" cy="60%" r="55%">
+        <radialGradient id="ap-heroGlow" cx="50%" cy="50%" r="50%">
           <stop offset="0%" stopColor={T.acc} stopOpacity="0.18" />
           <stop offset="100%" stopColor={T.acc} stopOpacity="0" />
         </radialGradient>
@@ -155,7 +162,7 @@ function HeroBackdrop({ T }) {
         </linearGradient>
         <mask id="ap-hbMask"><rect x="0" y="0" width="1200" height="600" fill="url(#ap-fadeMaskL)" /></mask>
       </defs>
-      <ellipse cx="940" cy="330" rx="380" ry="280" fill="url(#ap-heroGlow)" />
+      <ellipse cx="1080" cy="380" rx="460" ry="340" fill="url(#ap-heroGlow)" />
       <g mask="url(#ap-hbMask)">
         {edges.map(([a, b], i) => {
           const [x1, y1] = nodes[a]; const [x2, y2] = nodes[b];
@@ -171,6 +178,7 @@ function HeroBackdrop({ T }) {
         <circle cx="920" cy="320" r="68" fill="none" stroke={T.acc} strokeWidth="0.5" opacity="0.18" />
       </g>
     </svg>
+    </div>
   );
 }
 
@@ -294,7 +302,7 @@ export default function Site() {
   `;
 
   return (
-    <div style={{ position: "relative", minHeight: "100vh", background: T.bg, color: T.text }}>
+    <div style={{ position: "relative", minHeight: "100vh", background: T.bg, color: T.text, overflowX: "clip" }}>
       <style>{css}</style>
 
       {/* Grid overlay */}
