@@ -37,10 +37,17 @@ const SECTIONS = [
   { id: "domains",    label: "Domains",    num: "09" },
 ];
 
-const serializeCase = (c) => {
-  if (Array.isArray(c.tags)) return { ...c, tags: c.tags.join(", ") };
-  return c;
-};
+const MAX_CASE_METRICS = 3;
+
+const serializeCase = (c) => ({
+  ...c,
+  tags: Array.isArray(c.tags) ? c.tags.join(", ") : c.tags,
+  metrics: (c.metrics || [])
+    .map(m => ({ value: (m.value || "").trim(), label: (m.label || "").trim() }))
+    .filter(m => m.value || m.label)
+    .slice(0, MAX_CASE_METRICS),
+  project_id: c.project_id == null || c.project_id === "" ? null : Number(c.project_id),
+});
 
 const normalizeCase = (c) => {
   let tags = c.tags;
@@ -57,7 +64,11 @@ const normalizeCase = (c) => {
   } else {
     tags = [];
   }
-  return { ...c, tags };
+  const metrics = (Array.isArray(c.metrics) ? c.metrics : [])
+    .filter(m => m && (m.value || m.label))
+    .map(m => ({ value: String(m.value ?? ""), label: String(m.label ?? "") }));
+  const project_id = c.project_id == null || c.project_id === "" ? null : Number(c.project_id);
+  return { ...c, tags, metrics, project_id };
 };
 
 const nextId = (list = []) => (list.length ? Math.max(...list.map(x => x.id || 0)) + 1 : 1);
@@ -439,21 +450,25 @@ export default function Admin() {
             <Section
               id="cases" num="06" title="Cases"
               subtitle="Selected work. Аккордеон Context / Task / Result"
-              action={<BtnGhost onClick={() => addToList("cases", { title: "Untitled case", company: "", period: "", domain: "", tags: [], context: "", task: "", result: "", hidden: false })}>+ Add case</BtnGhost>}
+              action={<BtnGhost onClick={() => addToList("cases", { title: "Untitled case", company: "", domain: "", tags: [], context: "", task: "", result: "", metrics: [], project_id: null, hidden: false })}>+ Add case</BtnGhost>}
             >
               {data.cases?.map((c, i) => (
                 <Card key={c.id ?? i} accent>
                   <ItemHeader
                     title={c.title || "Untitled case"}
-                    subtitle={`${c.company || "—"} · ${c.period || "—"}`}
+                    subtitle={[data.projects?.find(p => p.id === c.project_id)?.title, c.company].filter(Boolean).join(" · ") || "—"}
                     hidden={!!c.hidden}
                     onToggleHidden={() => setListAt("cases", i, { hidden: !c.hidden })}
                     onRemove={() => removeFromList("cases", i)}
                   />
                   <Field label="Title" value={c.title} onChange={v => setListAt("cases", i, { title: v })} />
                   <Row>
+                    <Field label="Project (опционально)" type="select"
+                           options={[{ value: "", label: "— без проекта —" },
+                             ...(data.projects || []).filter(p => p.id != null).map(p => ({ value: String(p.id), label: p.title || `#${p.id}` }))]}
+                           value={c.project_id == null ? "" : String(c.project_id)}
+                           onChange={v => setListAt("cases", i, { project_id: v ? Number(v) : null })} />
                     <Field label="Company" value={c.company} onChange={v => setListAt("cases", i, { company: v })} />
-                    <Field label="Period"  value={c.period}  onChange={v => setListAt("cases", i, { period: v })} />
                     <Field label="Domain"  value={c.domain}  onChange={v => setListAt("cases", i, { domain: v })} />
                   </Row>
                   <TagEditor
@@ -465,6 +480,7 @@ export default function Admin() {
                   <Field label="Context" type="textarea" rows={3} value={c.context} onChange={v => setListAt("cases", i, { context: v })} />
                   <Field label="Task"    type="textarea" rows={3} value={c.task}    onChange={v => setListAt("cases", i, { task: v })} />
                   <Field label="Result"  type="textarea" rows={3} value={c.result}  onChange={v => setListAt("cases", i, { result: v })} />
+                  <MetricsEditor metrics={c.metrics || []} onChange={metrics => setListAt("cases", i, { metrics })} />
                 </Card>
               ))}
             </Section>
@@ -785,7 +801,9 @@ function Field({ label, value, onChange, type = "text", options, rows = 3 }) {
           style={{ ...inputBaseStyle, resize: "vertical", minHeight: 72 }} />
       ) : type === "select" ? (
         <select id={id} className="input" value={value ?? ""} onChange={e => onChange(e.target.value)} style={inputBaseStyle}>
-          {(options || []).map(o => <option key={o} value={o}>{o}</option>)}
+          {(options || []).map(o => typeof o === "object"
+            ? <option key={o.value} value={o.value}>{o.label}</option>
+            : <option key={o} value={o}>{o}</option>)}
         </select>
       ) : (
         <input id={id} className="input" type="text" value={value ?? ""} onChange={e => onChange(e.target.value)} style={inputBaseStyle} />
@@ -817,6 +835,30 @@ function Toggle({ label, hint, checked, onChange }) {
         {hint && <span style={{ fontSize: 12, color: C.txMu }}>{hint}</span>}
       </span>
     </label>
+  );
+}
+
+/* KPI кейса: до MAX_CASE_METRICS пар «значение + подпись». */
+function MetricsEditor({ metrics, onChange }) {
+  const set = (idx, patch) => onChange(metrics.map((m, j) => (j === idx ? { ...m, ...patch } : m)));
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <span style={labelStyle}>Metrics — до {MAX_CASE_METRICS}, напр. «+27–30%» / «scope gap found pre-contract»</span>
+      {metrics.map((m, idx) => (
+        <div key={idx} style={{ display: "grid", gridTemplateColumns: "140px 1fr auto", gap: 8, alignItems: "center" }}>
+          <input className="input" placeholder="Value" value={m.value ?? ""} style={inputBaseStyle}
+                 onChange={e => set(idx, { value: e.target.value })} />
+          <input className="input" placeholder="Label" value={m.label ?? ""} style={inputBaseStyle}
+                 onChange={e => set(idx, { label: e.target.value })} />
+          <BtnGhost type="button" onClick={() => onChange(metrics.filter((_, j) => j !== idx))}>×</BtnGhost>
+        </div>
+      ))}
+      {metrics.length < MAX_CASE_METRICS && (
+        <div>
+          <BtnGhost type="button" onClick={() => onChange([...metrics, { value: "", label: "" }])}>+ Add metric</BtnGhost>
+        </div>
+      )}
+    </div>
   );
 }
 

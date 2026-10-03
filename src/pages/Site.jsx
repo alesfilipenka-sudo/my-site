@@ -41,7 +41,11 @@ const normalizeCase = (c) => {
   } else {
     tags = [];
   }
-  return { ...c, tags };
+  const metrics = (Array.isArray(c.metrics) ? c.metrics : [])
+    .filter(m => m && (m.value || m.label))
+    .map(m => ({ value: String(m.value ?? ""), label: String(m.label ?? "") }));
+  const project_id = c.project_id == null || c.project_id === "" ? null : Number(c.project_id);
+  return { ...c, tags, metrics, project_id };
 };
 
 /* ─── Hooks & primitives ──────────────────────────────────── */
@@ -275,7 +279,8 @@ export default function Site() {
       .ap-process-grid, .ap-expertise-grid { grid-template-columns: 1fr 1fr !important; }
       .ap-case-row { grid-template-columns: 36px 1fr 32px !important; gap: 14px !important; padding: 18px !important; }
       .ap-case-tags { display: none !important; }
-      .ap-case-cols { grid-template-columns: 1fr !important; gap: 18px !important; padding: 0 18px 22px 60px !important; }
+      .ap-case-cols { grid-template-columns: 1fr !important; gap: 18px !important; padding: 18px 18px 22px 60px !important; }
+      .ap-case-metrics { grid-template-columns: 1fr !important; gap: 10px !important; padding: 18px 18px 0 60px !important; }
       .ap-nav-desktop { display: none !important; }
       .ap-nav-mobile-btn { display: inline-flex !important; }
       .ap-main { padding: 0 18px !important; }
@@ -566,6 +571,9 @@ export default function Site() {
             <div style={{ border: `0.5px solid ${T.border}`, borderRadius: 12, overflow: "hidden", background: T.bg2 }}>
               {cases.map((c, idx) => {
                 const isOpen = openCase === c.id;
+                const project = c.project_id != null ? (data.projects || []).find(p => p.id === c.project_id) : null;
+                const subline = [project?.title, c.company].filter(Boolean);
+                const metrics = (c.metrics || []).slice(0, 3);
                 return (
                   <div key={c.id} style={{ borderBottom: idx < cases.length - 1 ? `0.5px solid ${T.border}` : "none" }}>
                     <button onClick={() => setOpenCase(isOpen ? null : c.id)} className="ap-case-row"
@@ -581,12 +589,17 @@ export default function Site() {
                           <span style={{ fontSize: 17, fontWeight: 500, color: T.text, letterSpacing: "-0.01em" }}>{c.title}</span>
                           <Tag T={T} accent>{c.domain}</Tag>
                         </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8,
-                          fontFamily: "var(--mono)", fontSize: 11, color: T.textTer, letterSpacing: "0.04em" }}>
-                          <span>{c.company}</span>
-                          <span style={{ width: 3, height: 3, borderRadius: "50%", background: T.borderHi }} />
-                          <span>{c.period}</span>
-                        </div>
+                        {subline.length > 0 && (
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap",
+                            fontFamily: "var(--mono)", fontSize: 11, color: T.textTer, letterSpacing: "0.04em" }}>
+                            {subline.map((s, k) => (
+                              <span key={k} style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                                {k > 0 && <span style={{ width: 3, height: 3, borderRadius: "50%", background: T.borderHi }} />}
+                                <span style={k === 0 && project ? { color: T.textSec } : undefined}>{s}</span>
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                       <div className="ap-case-tags" style={{ display: "flex", flexWrap: "wrap", gap: 4, justifyContent: "flex-end" }}>
                         {(c.tags || []).slice(0, 2).map(t => (
@@ -604,10 +617,23 @@ export default function Site() {
                       </span>
                     </button>
 
-                    <div style={{ maxHeight: isOpen ? 600 : 0, overflow: "hidden", transition: "max-height 0.5s cubic-bezier(0.22,1,0.36,1)" }}>
+                    <div style={{ maxHeight: isOpen ? 1200 : 0, overflow: "hidden", transition: "max-height 0.5s cubic-bezier(0.22,1,0.36,1)" }}>
+                      {metrics.length > 0 && (
+                        <div className="ap-case-metrics" style={{ padding: "20px 28px 0 92px", borderTop: `0.5px dashed ${T.border}`,
+                          display: "grid", gridTemplateColumns: `repeat(${metrics.length}, minmax(0, 1fr))`, gap: 24 }}>
+                          {metrics.map((m, k) => (
+                            <div key={k} style={{ padding: "14px 16px", border: `0.5px solid ${T.border}`, borderRadius: 8, background: T.surface }}>
+                              <div style={{ fontSize: 24, fontWeight: 500, color: T.text, letterSpacing: "-0.02em",
+                                fontVariantNumeric: "tabular-nums", lineHeight: 1.1 }}>{m.value}</div>
+                              <div style={{ marginTop: 6, fontFamily: "var(--mono)", fontSize: 10, color: T.textTer,
+                                letterSpacing: "0.06em", textTransform: "uppercase", lineHeight: 1.4 }}>{m.label}</div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                       <div className="ap-case-cols" style={{ padding: "0 28px 28px 92px",
                         display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 24,
-                        borderTop: `0.5px dashed ${T.border}`, paddingTop: 20 }}>
+                        borderTop: metrics.length ? "none" : `0.5px dashed ${T.border}`, paddingTop: 20 }}>
                         {[["Context", c.context], ["Task", c.task], ["Result", c.result]].map(([label, val], i) => (
                           <div key={label}>
                             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
