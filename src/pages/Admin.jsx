@@ -35,6 +35,7 @@ const SECTIONS = [
   { id: "experience", label: "Experience", num: "07" },
   { id: "stack",      label: "Stack",      num: "08" },
   { id: "domains",    label: "Domains",    num: "09" },
+  { id: "cv",         label: "CV",         num: "10" },
 ];
 
 const MAX_CASE_METRICS = 3;
@@ -71,6 +72,32 @@ const normalizeCase = (c) => {
   return { ...c, tags, metrics, project_id };
 };
 
+/* CV: блок site_content.cv и CV-поля у experience. На сайте не показываются — только в PDF. */
+const EMPTY_CV = { title: "", summary: "", skills: [], languages: [], education: [], certifications: [] };
+const normalizeCv = (cv) => ({ ...EMPTY_CV, ...(cv && typeof cv === "object" ? cv : {}) });
+const trimLines = (list) => (Array.isArray(list) ? list : []).map(x => String(x ?? "").trim()).filter(Boolean);
+const serializeCv = (cv) => ({
+  ...cv,
+  skills: trimLines(cv.skills),
+  languages: trimLines(cv.languages),
+  education: (cv.education || []).filter(e => e.degree || e.institution || e.years),
+  certifications: (cv.certifications || []).filter(c => c.name || c.issuer || c.date),
+});
+const normalizeExperience = (e) => ({
+  ...e,
+  cv_highlights: Array.isArray(e.cv_highlights) ? e.cv_highlights : [],
+  cv_projects: Array.isArray(e.cv_projects) ? e.cv_projects : [],
+});
+const serializeExperience = (e) => ({
+  ...e,
+  cv_highlights: trimLines(e.cv_highlights),
+  cv_projects: (e.cv_projects || [])
+    .map(p => ({ name: (p.name || "").trim(), role: (p.role || "").trim(), period: (p.period || "").trim(),
+                 summary: (p.summary || "").trim(), highlights: trimLines(p.highlights) }))
+    .filter(p => p.name || p.highlights.length),
+  sort_order: e.sort_order === "" || e.sort_order == null ? null : Number(e.sort_order),
+});
+
 const nextId = (list = []) => (list.length ? Math.max(...list.map(x => x.id || 0)) + 1 : 1);
 
 /* ───────────────────────────  ROOT  ─────────────────────────── */
@@ -90,7 +117,9 @@ export default function Admin() {
     const [contentRes, casesRes, expRes, projectsRes] = await Promise.all([
       supabase.from("site_content").select("*"),
       supabase.from("cases").select("*").order("id", { ascending: true }),
-      supabase.from("experience").select("*").order("id", { ascending: true }),
+      supabase.from("experience").select("*")
+        .order("sort_order", { ascending: true, nullsFirst: false })
+        .order("id", { ascending: true }),
       supabase.from("projects").select("*").order("sort_order", { ascending: true }),
     ]);
     if (contentRes.error)  throw contentRes.error;
@@ -110,7 +139,8 @@ export default function Admin() {
       stats:      byKey.stats      ?? [],
       expertise:  byKey.expertise  ?? [],
       cases:      (casesRes.data ?? []).map(normalizeCase),
-      experience: expRes.data      ?? [],
+      experience: (expRes.data ?? []).map(normalizeExperience),
+      cv:         normalizeCv(byKey.cv),
       projects:   projectsRes.data ?? [],
     };
   };
@@ -188,6 +218,7 @@ export default function Admin() {
         { key: "domains",   data: data.domains   ?? [] },
         { key: "stats",     data: data.stats     ?? [] },
         { key: "expertise", data: data.expertise ?? [] },
+        { key: "cv",        data: serializeCv(normalizeCv(data.cv)) },
       ];
       const contentRes = await supabase
         .from("site_content")
@@ -223,11 +254,11 @@ export default function Admin() {
       // 3. experience
       const e = split(data.experience);
       if (e.existing.length) {
-        const r = await supabase.from("experience").upsert(e.existing, { onConflict: "id" });
+        const r = await supabase.from("experience").upsert(e.existing.map(serializeExperience), { onConflict: "id" });
         if (r.error) throw r.error;
       }
       if (e.fresh.length) {
-        const r = await supabase.from("experience").insert(e.fresh);
+        const r = await supabase.from("experience").insert(e.fresh.map(serializeExperience));
         if (r.error) throw r.error;
       }
 
@@ -279,6 +310,7 @@ export default function Admin() {
     setData({ ...data, [key]: data[key].filter((_, i) => i !== idx) });
   };
   const setStringList = (key, list) => setData({ ...data, [key]: list });
+  const setCv = (patch) => setData({ ...data, cv: { ...normalizeCv(data.cv), ...patch } });
 
   return (
     <div style={{ display: "flex", height: "100vh", overflow: "hidden", background: C.bg, color: C.tx, fontFamily: "Inter, system-ui, -apple-system, sans-serif", colorScheme: "light" }}>
@@ -489,7 +521,11 @@ export default function Admin() {
             <Section
               id="experience" num="07" title="Experience"
               subtitle="Career timeline. Зелёная точка = current"
-              action={<BtnGhost onClick={() => addToList("experience", { company: "New company", role: "", period: "", current: false })}>+ Add row</BtnGhost>}
+              action={<BtnGhost onClick={() => addToList("experience", {
+                company: "New company", role: "", period: "", current: false,
+                cv_highlights: [], cv_projects: [],
+                sort_order: Math.max(0, ...(data.experience || []).map(x => Number(x.sort_order) || 0)) + 10,
+              })}>+ Add row</BtnGhost>}
             >
               {data.experience?.map((e, i) => (
                 <Card key={e.id ?? i}>
@@ -511,6 +547,14 @@ export default function Admin() {
                     checked={!!e.current}
                     onChange={v => setListAt("experience", i, { current: v })}
                   />
+                  <Field label="Sort order (меньше = выше в таймлайне и CV)"
+                         value={e.sort_order == null ? "" : String(e.sort_order)}
+                         onChange={v => setListAt("experience", i, { sort_order: v === "" ? null : (parseInt(v, 10) || 0) })} />
+                  <CvBlockLabel />
+                  <LinesField label="CV · общие пункты (по одному на строку)" value={e.cv_highlights}
+                              onChange={list => setListAt("experience", i, { cv_highlights: list })} />
+                  <CvProjectsEditor projects={e.cv_projects || []}
+                                    onChange={list => setListAt("experience", i, { cv_projects: list })} />
                 </Card>
               ))}
             </Section>
@@ -536,6 +580,35 @@ export default function Admin() {
                   onChange={list => setStringList("domains", list)}
                   placeholder="Add domain…"
                   accent
+                />
+              </Card>
+            </Section>
+
+            {/* CV */}
+            <Section id="cv" num="10" title="CV"
+                     subtitle="Только для PDF по кнопке Download CV. Опыт и проекты — в Experience, Tools и Domains — из Stack и Domains.">
+              <Card>
+                <Field label="Title (пусто = как в Hero)" value={data.cv?.title} onChange={v => setCv({ title: v })} />
+                <Field label="Summary" type="textarea" rows={5} value={data.cv?.summary} onChange={v => setCv({ summary: v })} />
+                <TagEditor label="Skills (строка Analysis)" tags={data.cv?.skills || []}
+                           onChange={list => setCv({ skills: list })} placeholder="Add skill…" />
+                <TagEditor label="Languages" tags={data.cv?.languages || []}
+                           onChange={list => setCv({ languages: list })} placeholder="English — C1" />
+              </Card>
+              <Card>
+                <ObjectListEditor
+                  label="Education"
+                  items={data.cv?.education || []}
+                  fields={[["degree", "Degree"], ["institution", "Institution"], ["years", "Years"]]}
+                  onChange={list => setCv({ education: list })}
+                />
+              </Card>
+              <Card>
+                <ObjectListEditor
+                  label="Certifications"
+                  items={data.cv?.certifications || []}
+                  fields={[["name", "Name"], ["issuer", "Issuer"], ["date", "Date"]]}
+                  onChange={list => setCv({ certifications: list })}
                 />
               </Card>
             </Section>
@@ -858,6 +931,98 @@ function MetricsEditor({ metrics, onChange }) {
           <BtnGhost type="button" onClick={() => onChange([...metrics, { value: "", label: "" }])}>+ Add metric</BtnGhost>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ── CV-редакторы ── */
+function CvBlockLabel() {
+  return (
+    <div style={{ marginTop: 6, paddingTop: 12, borderTop: `1px dashed ${C.bd}`, fontSize: 11, fontWeight: 600,
+      letterSpacing: "0.05em", textTransform: "uppercase", color: C.acc }}>
+      Только для CV
+    </div>
+  );
+}
+
+/* Список строк как textarea: одна строка = один пункт. Пустые строки отбрасываются при сохранении. */
+function LinesField({ label, value, onChange, rows = 3 }) {
+  const text = (Array.isArray(value) ? value : []).join("\n");
+  return (
+    <Field label={label} type="textarea" rows={rows} value={text} onChange={v => onChange(v.split("\n"))} />
+  );
+}
+
+const moveItem = (list, from, to) => {
+  if (to < 0 || to >= list.length) return list;
+  const next = [...list];
+  const [x] = next.splice(from, 1);
+  next.splice(to, 0, x);
+  return next;
+};
+
+function MiniActions({ onUp, onDown, onRemove }) {
+  const st = { ...btnGhostStyle, padding: "4px 9px" };
+  return (
+    <div style={{ display: "flex", gap: 6 }}>
+      <button type="button" className="btn-ghost" style={st} onClick={onUp} title="Выше">↑</button>
+      <button type="button" className="btn-ghost" style={st} onClick={onDown} title="Ниже">↓</button>
+      <button type="button" className="btn-ghost" style={st} onClick={onRemove} title="Удалить">×</button>
+    </div>
+  );
+}
+
+function CvProjectsEditor({ projects, onChange }) {
+  const set = (idx, patch) => onChange(projects.map((p, j) => (j === idx ? { ...p, ...patch } : p)));
+  const remove = (idx) => { if (confirm("Удалить проект из CV?")) onChange(projects.filter((_, j) => j !== idx)); };
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <span style={labelStyle}>CV · проекты ({projects.length})</span>
+      {projects.map((p, idx) => (
+        <div key={idx} style={{ border: `1px solid ${C.bd}`, borderRadius: 10, padding: 14, display: "flex", flexDirection: "column", gap: 10, background: "#fafafb" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+            <strong style={{ fontSize: 13 }}>{p.name || "Untitled project"}</strong>
+            <MiniActions onUp={() => onChange(moveItem(projects, idx, idx - 1))}
+                         onDown={() => onChange(moveItem(projects, idx, idx + 1))}
+                         onRemove={() => remove(idx)} />
+          </div>
+          <Field label="Name (без названий продуктов и клиентов)" value={p.name} onChange={v => set(idx, { name: v })} />
+          <Row>
+            <Field label="Role (если отличается)" value={p.role} onChange={v => set(idx, { role: v })} />
+            <Field label="Period" value={p.period} onChange={v => set(idx, { period: v })} />
+          </Row>
+          <Field label="Summary (одна строка)" value={p.summary} onChange={v => set(idx, { summary: v })} />
+          <LinesField label="Highlights (по одному на строку)" rows={4} value={p.highlights}
+                      onChange={list => set(idx, { highlights: list })} />
+        </div>
+      ))}
+      <div>
+        <BtnGhost type="button" onClick={() => onChange([...projects, { name: "", role: "", period: "", summary: "", highlights: [] }])}>
+          + Add CV project
+        </BtnGhost>
+      </div>
+    </div>
+  );
+}
+
+/* Список объектов с одинаковыми полями (Education, Certifications). */
+function ObjectListEditor({ label, items, fields, onChange }) {
+  const set = (idx, patch) => onChange(items.map((x, j) => (j === idx ? { ...x, ...patch } : x)));
+  const empty = Object.fromEntries(fields.map(([k]) => [k, ""]));
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <span style={labelStyle}>{label}</span>
+      {items.map((it, idx) => (
+        <div key={idx} style={{ display: "grid", gridTemplateColumns: `repeat(${fields.length}, minmax(0, 1fr)) auto`, gap: 8, alignItems: "end" }}>
+          {fields.map(([k, l]) => (
+            <Field key={k} label={l} value={it[k]} onChange={v => set(idx, { [k]: v })} />
+          ))}
+          <MiniActions onUp={() => onChange(moveItem(items, idx, idx - 1))}
+                       onDown={() => onChange(moveItem(items, idx, idx + 1))}
+                       onRemove={() => onChange(items.filter((_, j) => j !== idx))} />
+        </div>
+      ))}
+      <div><BtnGhost type="button" onClick={() => onChange([...items, empty])}>+ Add</BtnGhost></div>
     </div>
   );
 }

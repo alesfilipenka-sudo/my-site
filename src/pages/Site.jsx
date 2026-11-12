@@ -8,6 +8,7 @@ import { PROJECT_ICONS } from "../lib/projectIcons.js";
 import ProjectCard from "../components/ProjectCard.jsx";
 import SiteHeader from "../components/SiteHeader.jsx";
 import { useTheme } from "../lib/theme.js";
+import { downloadCv } from "../lib/cv/downloadCv.js";
 
 /* ─── Tokens ───────────────────────────────────────────────── */
 
@@ -182,6 +183,36 @@ function HeroBackdrop({ T }) {
   );
 }
 
+/* ─── Download CV: PDF собирается в браузере из данных Supabase ─── */
+function DownloadCvButton({ T }) {
+  const [state, setState] = useState("idle"); // idle | busy | error
+  const onClick = async () => {
+    if (state === "busy") return;
+    setState("busy");
+    try {
+      await downloadCv();
+      setState("idle");
+    } catch (err) {
+      console.error("CV generation failed", err);
+      setState("error");
+      setTimeout(() => setState("idle"), 4000);
+    }
+  };
+  const label = state === "busy" ? "Preparing CV…" : state === "error" ? "Try again" : "Download CV";
+  return (
+    <button type="button" onClick={onClick} disabled={state === "busy"} aria-busy={state === "busy"} style={{
+      display: "inline-flex", alignItems: "center", gap: 8, cursor: state === "busy" ? "progress" : "pointer",
+      padding: "13px 22px", color: T.text, fontSize: 13, fontWeight: 500, fontFamily: "inherit",
+      border: `0.5px solid ${T.borderHi}`, borderRadius: 8, background: T.surface,
+    }}>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M12 3v12M7 10l5 5 5-5M5 21h14" />
+      </svg>
+      {label}
+    </button>
+  );
+}
+
 /* ─── Main page ───────────────────────────────────────────── */
 export default function Site() {
   const [data, setData] = useState(null);
@@ -196,7 +227,9 @@ export default function Site() {
         const [contentRes, casesRes, expRes, projectsRes] = await Promise.all([
           supabase.from("site_content").select("*"),
           supabase.from("cases").select("*").order("id", { ascending: true }),
-          supabase.from("experience").select("*").order("id", { ascending: true }),
+          supabase.from("experience").select("*")
+            .order("sort_order", { ascending: true, nullsFirst: false })
+            .order("id", { ascending: true }),
           supabase.from("projects").select("*").order("sort_order", { ascending: true }),
         ]);
         if (contentRes.error || casesRes.error || expRes.error || projectsRes.error) {
@@ -335,7 +368,7 @@ export default function Site() {
                 {data.hero.available && (
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <AnalyticalDot size={6} color={T.ok} pulse />
-                    <span style={{ color: T.ok }}>Available for projects</span>
+                    <span style={{ color: T.ok }}>Available</span>
                   </div>
                 )}
                 <span style={{ height: 1, width: 20, background: T.borderMd }} />
@@ -389,19 +422,12 @@ export default function Site() {
                         fontSize: 13, fontWeight: 600, borderRadius: 8, position: "relative",
                         boxShadow: `0 0 0 0.5px ${T.acc}, 0 0 0 4px rgba(${T.accGlow},0.12), 0 0 24px rgba(${T.accGlow},0.55), 0 0 60px rgba(${T.accGlow},0.35), 0 12px 40px -8px rgba(${T.accGlow},0.6)`,
                       }}>
-                        Start a project
+                        Get in touch
                         <span style={{ fontFamily: "var(--mono)", opacity: 0.7 }}>→</span>
                       </a>
                     </Magnetic>
                     <Magnetic strength={0.2}>
-                      <a href={data.hero.linkedin} target="_blank" rel="noreferrer" style={{
-                        display: "inline-flex", alignItems: "center", gap: 8,
-                        padding: "13px 22px", color: T.text, fontSize: 13, fontWeight: 500,
-                        border: `0.5px solid ${T.borderHi}`, borderRadius: 8, background: T.surface,
-                      }}>
-                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: T.textSec }} />
-                        LinkedIn
-                      </a>
+                      <DownloadCvButton T={T} />
                     </Magnetic>
                   </div>
                 </Reveal>
